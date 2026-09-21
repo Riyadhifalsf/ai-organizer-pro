@@ -229,6 +229,86 @@ const server = createServer(async (req, res) => {
       const r = await callSidecar({ cmd: "list-videos", root: u.searchParams.get("root") || "", limit: 2000, kind: u.searchParams.get("kind") || "videos" }, 120000);
       return send(res, 200, r);
     }
+    if (req.method === "GET" && u.pathname === "/api/folders/list") {
+      const r = await callSidecar({ cmd: "list-folders", root: u.searchParams.get("root") || "", limit: Number(u.searchParams.get("limit")) || 5000 }, 120000);
+      return send(res, 200, r);
+    }
+    // ---- operasi file video/foto (web-mode; native Tauri punya padanannya di main.rs) ----
+    // Sidecar Python satu-satunya pelaksana agar format respons + store anotasi identik.
+    const videoCmd = {
+      "/api/file/info": "file-info",
+      "/api/video/inspect": "video-inspect",
+      "/api/video/open": "video-open",
+      "/api/video/folder": "video-folder",
+      "/api/video/rename": "video-rename",
+      "/api/video/move": "video-move",
+      "/api/video/quarantine": "video-quarantine",
+      "/api/video/annotation": "video-annotation",
+      "/api/video/duplicate-check": "video-duplicate-check",
+    }[u.pathname];
+    if (req.method === "POST" && videoCmd) {
+      const b = await bodyJson(req);
+      if (!b.path) return send(res, 400, { ok: false, error: "path wajib" });
+      const r = await callSidecar({ cmd: videoCmd, path: b.path, new_name: b.new_name || "", destination: b.destination || "", tags: b.tags || [], note: b.note || "" }, 120000);
+      if (r.ok) await logActivity(videoCmd, b.path);
+      return send(res, 200, r);
+    }
+    if (req.method === "POST" && u.pathname === "/api/jobs/run") {
+      // Worker web: claim 1 job -> eksekusi (scan/duplicates/ai/organize) -> finish.
+      // Cermin job_run_once di src-tauri/main.rs.
+      const claim = await runCore(["job-claim", "--db", resolveDb(), "--json"]);
+      const c = parseJsonLine(claim.out);
+      if (!c || !c.ok) return send(res, 200, { ok: true, ran: false, message: "tidak ada job pending" });
+      const id = c.id, kind = c.kind || "";
+      let payload = {};
+      try { payload = JSON.parse(c.payload || "{}"); } catch { payload = { value: c.payload || "" }; }
+      const finish = async (status, result) => {
+        const f = await runCore(["job-finish", String(id), status, typeof result === "string" ? result : JSON.stringify(result), "--db", resolveDb(), "--json"]);
+        return parseJsonLine(f.out) || { ok: false };
+      };
+      try {
+        let result;
+        if (kind === "scan") {
+          const folder = payload.folder || payload.root || payload.value;
+          if (!folder) throw new Error("payload scan harus punya folder/root");
+          result = parseJsonLine((await runCore(["scan", folder, "--db", resolveDb(), "--json", "--actor", "gui"])).out);
+        } else if (kind === "duplicates") {
+          const folder = payload.folder || payload.root || payload.value;
+          if (!folder) throw new Error("payload duplicates harus punya folder/root");
+          result = parseJsonLine((await runCore(["duplicates", folder, "--db", resolveDb(), "--json", "--actor", "gui", "--min-size", String(payload.min_size ?? 1), "--workers", "4"], 30 * 60 * 1000)).out);
+        } else if (kind === "ai") {
+          if (!Array.isArray(payload.argv)) throw new Error("payload ai harus punya argv[]");
+          result = await callSidecar({ cmd: "engine", argv: payload.argv }, 30 * 60 * 1000);
+        } else if (kind === "organize") {
+          const mode = payload.kind === "images" ? "organize-images" : "organize-videos";
+          const argv = [mode, payload.folder || ""];
+          if (Array.isArray(payload.files) && payload.files.length) {
+            const listPath = path.join(os.tmpdir(), `orgsel-${Date.now()}.txt`);
+            await writeFile(listPath, payload.files.join("\n"), "utf8");
+            argv.push("--file-list", listPath);
+          }
+          if (payload.dest) argv.push("--dest-root", payload.dest);
+          for (const cc of payload.content || []) argv.push("--content", cc);
+          if (payload.copy) argv.push("--apply-copy");
+          if (payload.dated) argv.push("--rename-dated");
+          if (payload.junk) argv.push("--junk-to-delete");
+          if (payload.prune) argv.push("--prune-empty");
+          if (payload.limit) argv.push("--limit", String(payload.limit));
+          argv.push(payload.apply ? "--apply" : "--dry-run");
+          result = await callSidecar({ cmd: "engine", argv }, 30 * 60 * 1000);
+        } else {
+          throw new Error(`jenis job tidak didukung worker web: ${kind}`);
+        }
+        const okRes = result && result.ok !== false;
+        const fin = await finish(okRes ? "done" : "failed", result || {});
+        await logActivity("job-run", `#${id} ${kind} -> ${okRes ? "done" : "failed"}`);
+        return send(res, 200, { ok: okRes, ran: true, id, kind, result, finish: fin });
+      } catch (e) {
+        const fin = await finish("failed", String(e).slice(0, 1000));
+        await logActivity("job-error", `#${id} ${kind}: ${String(e).slice(0, 200)}`);
+        return send(res, 200, { ok: false, ran: true, id, kind, error: String(e).slice(0, 1000), finish: fin });
+      }
+    }
     if (req.method === "POST" && u.pathname === "/api/organize") {
       const b = await bodyJson(req);
       if (!b.folder) return send(res, 400, { ok: false, error: "folder wajib" });

@@ -5,15 +5,32 @@
 // port. Build: `rustup toolchain install stable` lalu `tauri build` dari sini.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 fn pro_root() -> PathBuf {
-    std::env::current_exe()
+    if let Ok(v) = std::env::var("AIORG_ROOT") {
+        let p = PathBuf::from(v);
+        if p.exists() { return p; }
+    }
+    let exe_dir = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|x| x.to_path_buf()))
-        .unwrap_or_else(|| PathBuf::from("."))
+        .unwrap_or_else(|| PathBuf::from("."));
+    let mut candidates = Vec::new();
+    candidates.push(exe_dir.clone());
+    candidates.push(exe_dir.join("resources"));
+    let mut cur = exe_dir;
+    for _ in 0..7 {
+        candidates.push(cur.clone());
+        if let Some(parent) = cur.parent() { cur = parent.to_path_buf(); } else { break; }
+    }
+    candidates.into_iter().find(|p|
+        p.join("engine-py").join("sidecar.py").is_file() ||
+        p.join("gui").join("index.html").is_file() ||
+        p.join("aiorganizer.exe").is_file()
+    ).unwrap_or_else(|| PathBuf::from("."))
 }
 
 fn core_bin() -> PathBuf {
@@ -24,28 +41,49 @@ fn core_bin() -> PathBuf {
     for c in [
         root.join("aiorganizer.exe"),
         root.join("aiorganizer"),
-        root.join("../aiorganizer.exe"),
-        root.join("../build/src/aiorganizer.exe"),
+        root.join("resources").join("aiorganizer.exe"),
+        root.join("build/src/aiorganizer.exe"),
+        root.join("build").join("src").join("aiorganizer.exe"),
     ] {
-        if c.exists() {
-            return c;
-        }
+        if c.exists() { return c; }
     }
     PathBuf::from("aiorganizer")
 }
 
+fn engine_dir() -> PathBuf { pro_root().join("engine-py") }
+fn ffprobe_bin() -> PathBuf {
+    if let Ok(v) = std::env::var("AIORG_FFPROBE") { return PathBuf::from(v); }
+    for c in [
+        engine_dir().join("app/ffmpeg/bin/ffprobe.exe"),
+        engine_dir().join("ffmpeg/bin/ffprobe.exe"),
+        pro_root().join("ffmpeg/bin/ffprobe.exe"),
+    ] {
+        if c.is_file() { return c; }
+    }
+    PathBuf::from(if cfg!(windows) { "ffprobe.exe" } else { "ffprobe" })
+}
+
+fn python_program() -> (String, Vec<String>) {
+    if let Ok(v) = std::env::var("AIORG_PYTHON") { return (v, Vec::new()); }
+    for c in [
+        pro_root().join("python.exe"),
+        pro_root().join("python/python.exe"),
+        engine_dir().join("python.exe"),
+        engine_dir().join(".venv/Scripts/python.exe"),
+        pro_root().join(".venv/Scripts/python.exe"),
+    ] {
+        if c.is_file() { return (c.to_string_lossy().into_owned(), Vec::new()); }
+    }
+    if cfg!(windows) { ("py".into(), vec!["-3".into()]) } else { ("python3".into(), Vec::new()) }
+}
+
 fn unified_db() -> String {
     std::env::var("AIORG_DB").unwrap_or_else(|_| {
-        pro_root()
-            .join("../data/aiorganizer.db")
-            .to_string_lossy()
-            .into_owned()
+        pro_root().join("data/aiorganizer.db").to_string_lossy().into_owned()
     })
 }
 
-fn db_state_path() -> PathBuf {
-    pro_root().join("../data/db.json")
-}
+fn db_state_path() -> PathBuf { pro_root().join("data/db.json") }
 
 // Saklar database (data/db.json). Mati = ":memory:" (efemeral).
 fn read_db_state() -> (bool, String) {
@@ -78,7 +116,7 @@ fn activity_path() -> PathBuf {
     if let Ok(v) = std::env::var("AIORG_ACTIVITY") {
         return PathBuf::from(v);
     }
-    pro_root().join("../data/activity.log")
+    pro_root().join("data/activity.log")
 }
 
 // Log aktivitas user (JSONL). Best-effort: gagal tulis = abaikan.
@@ -127,7 +165,7 @@ fn chrono_now_iso() -> String {
 }
 
 fn run_core(args: Vec<String>) -> Result<serde_json::Value, String> {
-    let ffprobe = pro_root().join("../engine-py/app/ffmpeg/bin/ffprobe.exe");
+    let ffprobe = ffprobe_bin();
     let out = Command::new(core_bin())
         .args(&args)
         .env("AIORG_FFPROBE", ffprobe)
@@ -152,12 +190,14 @@ fn run_core(args: Vec<String>) -> Result<serde_json::Value, String> {
 }
 
 fn call_sidecar(cmd: &str, extra: serde_json::Value) -> Result<serde_json::Value, String> {
-    let sidecar = pro_root().join("../engine-py/sidecar.py");
+    let sidecar = engine_dir().join("sidecar.py");
     let mut req = serde_json::json!({"id": 1, "cmd": cmd});
     for (k, v) in extra.as_object().cloned().unwrap_or_default() {
         req[k] = v;
     }
-    let mut child = Command::new("python")
+    let (python, py_args) = python_program();
+    let mut child = Command::new(python)
+        .args(py_args)
         .arg(&sidecar)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -254,6 +294,11 @@ fn docs_list(limit: i64) -> Result<serde_json::Value, String> {
 #[tauri::command]
 fn videos_list(root: String, limit: i64, kind: String) -> Result<serde_json::Value, String> {
     call_sidecar("list-videos", serde_json::json!({"root": root, "limit": limit, "kind": kind}))
+}
+
+#[tauri::command]
+fn folders_list(root: String, limit: i64) -> Result<serde_json::Value, String> {
+    call_sidecar("list-folders", serde_json::json!({"root": root, "limit": limit}))
 }
 
 #[tauri::command]
@@ -370,9 +415,7 @@ fn activity_clear() -> Result<serde_json::Value, String> {
     Ok(serde_json::json!({"ok": true}))
 }
 
-fn exports_dir() -> PathBuf {
-    pro_root().join("../data/exports")
-}
+fn exports_dir() -> PathBuf { pro_root().join("data/exports") }
 
 // Simpan salinan log aktivitas ke data/exports (untuk tombol Unduh di native).
 #[tauri::command]
@@ -389,9 +432,7 @@ fn activity_export() -> Result<serde_json::Value, String> {
     }
 }
 
-fn reports_dir() -> PathBuf {
-    pro_root().join("../engine-py/results/reports")
-}
+fn reports_dir() -> PathBuf { engine_dir().join("results/reports") }
 
 // Salin 1 file laporan (basename saja, anti path-traversal) ke data/exports.
 #[tauri::command]
@@ -561,33 +602,125 @@ fn prop_reject(target: String) -> Result<serde_json::Value, String> {
 }
 
 // ---- operasi panel video desktop ----
-// Semua aksi diselesaikan di native backend, bukan lewat shell JavaScript.
-// "Hapus" pada UI dipetakan ke 99_To-Delete agar tetap dapat dipulihkan.
+// Semua aksi file dijalankan native dan tidak menghapus permanen.
 fn checked_video_path(path: &str) -> Result<PathBuf, String> {
-    let p = PathBuf::from(path);
+    let p = PathBuf::from(path.trim());
     if !p.is_file() { return Err("file video tidak ditemukan".into()); }
     std::fs::canonicalize(p).map_err(|e| e.to_string())
 }
 
-fn video_annotation_path() -> PathBuf { pro_root().join("data").join("video-annotations.json") }
+fn video_annotation_path() -> PathBuf { pro_root().join("data/video-annotations.json") }
+
+fn read_annotations() -> serde_json::Map<String, serde_json::Value> {
+    std::fs::read_to_string(video_annotation_path())
+        .ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+}
+
+fn write_annotations(all: &serde_json::Map<String, serde_json::Value>) -> Result<(), String> {
+    let store = video_annotation_path();
+    if let Some(parent) = store.parent() { std::fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
+    let text = serde_json::to_string_pretty(all).map_err(|e| e.to_string())?;
+    // JSON metadata kecil; tulis langsung agar kompatibel di Windows saat file tujuan sudah ada.
+    std::fs::write(&store, text).map_err(|e| e.to_string())?;
+    Ok(())
+}
 
 fn video_annotation_for(path: &str) -> serde_json::Value {
-    let all: serde_json::Value = std::fs::read_to_string(video_annotation_path())
-        .ok().and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(|| serde_json::json!({}));
-    all.get(path).cloned().unwrap_or_else(|| serde_json::json!({"tags": [], "note": ""}))
+    read_annotations().get(path).cloned()
+        .unwrap_or_else(|| serde_json::json!({"tags": [], "note": ""}))
+}
+
+fn migrate_video_annotation(old_path: &str, new_path: &str) -> Result<(), String> {
+    let mut all = read_annotations();
+    if let Some(value) = all.remove(old_path) {
+        all.insert(new_path.to_string(), value);
+        write_annotations(&all)?;
+    }
+    Ok(())
+}
+
+fn file_contents_equal(a: &PathBuf, b: &PathBuf) -> Result<bool, String> {
+    let ma = std::fs::metadata(a).map_err(|e| e.to_string())?;
+    let mb = std::fs::metadata(b).map_err(|e| e.to_string())?;
+    if ma.len() != mb.len() { return Ok(false); }
+    let mut fa = std::fs::File::open(a).map_err(|e| e.to_string())?;
+    let mut fb = std::fs::File::open(b).map_err(|e| e.to_string())?;
+    let mut ba = vec![0u8; 1024 * 1024];
+    let mut bb = vec![0u8; 1024 * 1024];
+    loop {
+        let ra = fa.read(&mut ba).map_err(|e| e.to_string())?;
+        let rb = fb.read(&mut bb).map_err(|e| e.to_string())?;
+        if ra != rb { return Ok(false); }
+        if ra == 0 { return Ok(true); }
+        if ba[..ra] != bb[..rb] { return Ok(false); }
+    }
+}
+
+fn move_video_file(source: &PathBuf, target: PathBuf, action: &str) -> Result<serde_json::Value, String> {
+    if target.exists() { return Err("file tujuan sudah ada".into()); }
+    if let Some(parent) = target.parent() { std::fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
+    let old_key = source.to_string_lossy().into_owned();
+    let target_key = target.to_string_lossy().into_owned();
+
+    let mut mode = "rename";
+    if std::fs::rename(source, &target).is_err() {
+        // Antar-volume Windows tidak bisa memakai rename; copy + verify + delete.
+        mode = "copy-verify-delete";
+        std::fs::copy(source, &target).map_err(|e| format!("move lintas drive gagal saat copy: {e}"))?;
+        let verified = file_contents_equal(source, &target)?;
+        if !verified {
+            let _ = std::fs::remove_file(&target);
+            return Err("verifikasi copy gagal: isi file tujuan berbeda".into());
+        }
+        if let Err(e) = std::fs::remove_file(source) {
+            let _ = std::fs::remove_file(&target);
+            return Err(format!("copy sudah dibuat tetapi file sumber tidak dapat dihapus: {e}"));
+        }
+    }
+    let _ = migrate_video_annotation(&old_key, &target_key);
+    log_activity(action, &format!("{} -> {} [{}]", old_key, target_key, mode));
+    Ok(serde_json::json!({"ok": true, "path": target_key, "mode": mode}))
+}
+
+#[tauri::command]
+fn pick_video_file() -> Result<serde_json::Value, String> {
+    if !cfg!(windows) { return Ok(serde_json::json!({"ok": false, "cancelled": true})); }
+    let ps = r#"Add-Type -AssemblyName System.Windows.Forms; $d=New-Object System.Windows.Forms.OpenFileDialog; $d.Title='Pilih video'; $d.Filter='Video files|*.mp4;*.mov;*.mts;*.m2ts;*.mkv;*.avi;*.wmv;*.webm|All files|*.*'; if($d.ShowDialog() -eq 'OK'){ [Console]::Write($d.FileName) }"#;
+    let out = Command::new("powershell.exe").args(["-NoProfile", "-STA", "-Command", ps]).output().map_err(|e| e.to_string())?;
+    if !out.status.success() { return Err(String::from_utf8_lossy(&out.stderr).trim().to_string()); }
+    let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    Ok(serde_json::json!({"ok": !path.is_empty(), "cancelled": path.is_empty(), "path": path}))
+}
+
+#[tauri::command]
+fn pick_image_file() -> Result<serde_json::Value, String> {
+    if !cfg!(windows) { return Ok(serde_json::json!({"ok": false, "cancelled": true})); }
+    let ps = r#"Add-Type -AssemblyName System.Windows.Forms; $d=New-Object System.Windows.Forms.OpenFileDialog; $d.Title='Pilih foto'; $d.Filter='Image files|*.jpg;*.jpeg;*.png;*.webp;*.bmp;*.gif;*.tif;*.tiff;*.heic;*.heif|All files|*.*'; if($d.ShowDialog() -eq 'OK'){ [Console]::Write($d.FileName) }"#;
+    let out = Command::new("powershell.exe").args(["-NoProfile", "-STA", "-Command", ps]).output().map_err(|e| e.to_string())?;
+    if !out.status.success() { return Err(String::from_utf8_lossy(&out.stderr).trim().to_string()); }
+    let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    Ok(serde_json::json!({"ok": !path.is_empty(), "cancelled": path.is_empty(), "path": path}))
+}
+
+#[tauri::command]
+fn pick_folder() -> Result<serde_json::Value, String> {
+    if !cfg!(windows) { return Ok(serde_json::json!({"ok": false, "cancelled": true})); }
+    let ps = r#"Add-Type -AssemblyName System.Windows.Forms; $d=New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description='Pilih folder'; $d.ShowNewFolderButton=$true; if($d.ShowDialog() -eq 'OK'){ [Console]::Write($d.SelectedPath) }"#;
+    let out = Command::new("powershell.exe").args(["-NoProfile", "-STA", "-Command", ps]).output().map_err(|e| e.to_string())?;
+    if !out.status.success() { return Err(String::from_utf8_lossy(&out.stderr).trim().to_string()); }
+    let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    Ok(serde_json::json!({"ok": !path.is_empty(), "cancelled": path.is_empty(), "path": path}))
 }
 
 #[tauri::command]
 fn video_inspect(path: String) -> Result<serde_json::Value, String> {
     let p = checked_video_path(&path)?;
     let meta = std::fs::metadata(&p).map_err(|e| e.to_string())?;
-    let modified = meta.modified().ok()
+    let modified_ms = meta.modified().ok()
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-        .map(|d| d.as_secs().to_string()).unwrap_or_else(|| "—".into());
-    let path = p.to_string_lossy().into_owned();
-    let ffprobe = pro_root().join("engine-py/app/ffmpeg/bin/ffprobe.exe");
-    let probe_result = Command::new(ffprobe)
+        .map(|d| d.as_millis() as i64).unwrap_or(0);
+    let canonical = p.to_string_lossy().into_owned();
+    let probe_result = Command::new(ffprobe_bin())
         .args(["-v", "error", "-show_entries", "format=duration:stream=codec_type,codec_name,profile,width,height,avg_frame_rate,display_aspect_ratio", "-of", "json"])
         .arg(&p).output();
     let mut probe = serde_json::json!({"ok": false, "error": "ffprobe tidak tersedia"});
@@ -604,6 +737,7 @@ fn video_inspect(path: String) -> Result<serde_json::Value, String> {
                     "ok": vs.is_some(),
                     "duration": raw.get("format").and_then(|f| f.get("duration")).and_then(|x| x.as_str()).and_then(|x| x.parse::<f64>().ok()),
                     "video": {"codec": vs.and_then(|s| s.get("codec_name")).and_then(|x| x.as_str()).unwrap_or("—"),
+                        "profile": vs.and_then(|s| s.get("profile")).and_then(|x| x.as_str()).unwrap_or("—"),
                         "width": vs.and_then(|s| s.get("width")).and_then(|x| x.as_i64()), "height": vs.and_then(|s| s.get("height")).and_then(|x| x.as_i64()),
                         "fps": fps, "aspect": vs.and_then(|s| s.get("display_aspect_ratio")).and_then(|x| x.as_str()).unwrap_or("—")},
                     "audio": {"codec": aus.and_then(|s| s.get("codec_name")).and_then(|x| x.as_str()).unwrap_or("Tidak ada")}
@@ -612,17 +746,57 @@ fn video_inspect(path: String) -> Result<serde_json::Value, String> {
         } else { probe = serde_json::json!({"ok": false, "error": String::from_utf8_lossy(&out.stderr).trim()}); }
     }
     Ok(serde_json::json!({
-        "ok": true, "path": path, "name": p.file_name().and_then(|x| x.to_str()).unwrap_or("video"),
-        "size": meta.len(), "modified": modified, "extension": p.extension().and_then(|x| x.to_str()).unwrap_or("video"),
-        "probe": probe, "annotation": video_annotation_for(&path),
+        "ok": true, "path": canonical, "name": p.file_name().and_then(|x| x.to_str()).unwrap_or("video"),
+        "size": meta.len(), "modified_ms": modified_ms, "extension": p.extension().and_then(|x| x.to_str()).unwrap_or("video"),
+        "probe": probe, "annotation": video_annotation_for(&canonical),
     }))
+}
+
+#[tauri::command]
+fn file_info(path: String) -> Result<serde_json::Value, String> {
+    let p = PathBuf::from(path.trim());
+    if !p.is_file() { return Err("file tidak ditemukan".into()); }
+    let p = std::fs::canonicalize(p).map_err(|e| e.to_string())?;
+    let meta = std::fs::metadata(&p).map_err(|e| e.to_string())?;
+    let modified_ms = meta.modified().ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as i64).unwrap_or(0);
+    Ok(serde_json::json!({
+        "ok": true,
+        "path": p.to_string_lossy(),
+        "name": p.file_name().and_then(|x| x.to_str()).unwrap_or("file"),
+        "size": meta.len(),
+        "modified_ms": modified_ms,
+        "extension": p.extension().and_then(|x| x.to_str()).unwrap_or("")
+    }))
+}
+
+#[tauri::command]
+fn video_duplicate_check(path: String) -> Result<serde_json::Value, String> {
+    let p = checked_video_path(&path)?;
+    let parent = p.parent().ok_or("folder sumber tidak ada")?;
+    let r = run_core(vec![
+        "duplicates".into(), parent.to_string_lossy().into_owned(), "--db".into(), active_db(),
+        "--json".into(), "--actor".into(), "gui".into(), "--min-size".into(), "1".into(),
+    ])?;
+    let key = p.to_string_lossy().to_ascii_lowercase();
+    let mut group = serde_json::Value::Null;
+    let mut duplicate = false;
+    if let Some(groups) = r.get("groups").and_then(|x| x.as_array()) {
+        for g in groups {
+            let paths = g.get("paths").and_then(|x| x.as_array()).cloned().unwrap_or_default();
+            let has = paths.iter().any(|x| x.as_str().map(|s| s.to_ascii_lowercase() == key).unwrap_or(false));
+            if has && paths.len() > 1 { duplicate = true; group = g.clone(); break; }
+        }
+    }
+    log_activity("video-duplicate-check", &format!("{} -> {}", p.display(), duplicate));
+    Ok(serde_json::json!({"ok": true, "duplicate": duplicate, "group": group}))
 }
 
 #[tauri::command]
 fn video_open(path: String) -> Result<serde_json::Value, String> {
     let p = checked_video_path(&path)?;
-    Command::new("rundll32.exe").arg("url.dll,FileProtocolHandler").arg(&p)
-        .spawn().map_err(|e| e.to_string())?;
+    Command::new("rundll32.exe").arg("url.dll,FileProtocolHandler").arg(&p).spawn().map_err(|e| e.to_string())?;
     log_activity("video-open", &p.to_string_lossy());
     Ok(serde_json::json!({"ok": true}))
 }
@@ -630,38 +804,35 @@ fn video_open(path: String) -> Result<serde_json::Value, String> {
 #[tauri::command]
 fn video_show_folder(path: String) -> Result<serde_json::Value, String> {
     let p = checked_video_path(&path)?;
-    Command::new("explorer.exe").arg(format!("/select,{}", p.to_string_lossy()))
-        .spawn().map_err(|e| e.to_string())?;
+    Command::new("explorer.exe").arg(format!("/select,{}", p.to_string_lossy())).spawn().map_err(|e| e.to_string())?;
+    log_activity("video-show-folder", &p.to_string_lossy());
     Ok(serde_json::json!({"ok": true}))
-}
-
-fn move_video_file(source: &PathBuf, target: PathBuf, action: &str) -> Result<serde_json::Value, String> {
-    if target.exists() { return Err("file tujuan sudah ada".into()); }
-    std::fs::rename(source, &target).map_err(|e| e.to_string())?;
-    let path = target.to_string_lossy().into_owned();
-    log_activity(action, &format!("{} -> {}", source.to_string_lossy(), path));
-    Ok(serde_json::json!({"ok": true, "path": path}))
 }
 
 #[tauri::command]
 fn video_rename(path: String, new_name: String) -> Result<serde_json::Value, String> {
     let source = checked_video_path(&path)?;
-    if new_name.is_empty() || new_name.contains(['\\', '/', ':', '*', '?', '"', '<', '>', '|']) {
+    let mut name = new_name.trim().to_string();
+    if name.is_empty() || name.chars().any(|c| c.is_control() || "\\/:*?\"<>|".contains(c)) || name == "." || name == ".." {
         return Err("nama file tidak valid".into());
     }
-    let mut name = new_name;
     if PathBuf::from(&name).extension().is_none() {
         if let Some(ext) = source.extension().and_then(|x| x.to_str()) { name.push('.'); name.push_str(ext); }
     }
     let target = source.parent().ok_or("folder sumber tidak ada")?.join(name);
+    if target == source { return Ok(serde_json::json!({"ok": true, "path": source.to_string_lossy()})); }
     move_video_file(&source, target, "video-rename")
 }
 
 #[tauri::command]
 fn video_move(path: String, destination: String) -> Result<serde_json::Value, String> {
     let source = checked_video_path(&path)?;
+    let destination = destination.trim();
+    if destination.is_empty() { return Err("folder tujuan wajib diisi".into()); }
     let folder = PathBuf::from(destination);
-    if !folder.is_dir() { return Err("folder tujuan tidak ditemukan".into()); }
+    if !folder.exists() { std::fs::create_dir_all(&folder).map_err(|e| format!("folder tujuan tidak bisa dibuat: {e}"))?; }
+    if !folder.is_dir() { return Err("tujuan bukan folder".into()); }
+    let folder = std::fs::canonicalize(folder).map_err(|e| format!("tujuan tidak bisa dibaca: {e}"))?;
     let target = folder.join(source.file_name().ok_or("nama file tidak valid")?);
     move_video_file(&source, target, "video-move")
 }
@@ -685,14 +856,77 @@ fn video_quarantine(path: String) -> Result<serde_json::Value, String> {
 fn video_save_annotation(path: String, tags: Vec<String>, note: String) -> Result<serde_json::Value, String> {
     let p = checked_video_path(&path)?;
     let key = p.to_string_lossy().into_owned();
-    let store = video_annotation_path();
-    if let Some(parent) = store.parent() { std::fs::create_dir_all(parent).map_err(|e| e.to_string())?; }
-    let mut all: serde_json::Map<String, serde_json::Value> = std::fs::read_to_string(&store).ok()
-        .and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
-    all.insert(key.clone(), serde_json::json!({"tags": tags, "note": note}));
-    std::fs::write(store, serde_json::to_string_pretty(&all).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+    let mut all = read_annotations();
+    let clean_tags: Vec<String> = tags.into_iter().map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).take(30).collect();
+    all.insert(key.clone(), serde_json::json!({"tags": clean_tags, "note": note.chars().take(5000).collect::<String>()}));
+    write_annotations(&all)?;
     log_activity("video-annotation", &key);
     Ok(serde_json::json!({"ok": true}))
+}
+
+#[tauri::command]
+fn job_run_once() -> Result<serde_json::Value, String> {
+    if !read_db_state().0 {
+        return Ok(serde_json::json!({"ok": false, "ran": false, "error": "worker antrean membutuhkan Database ON agar state job konsisten"}));
+    }
+    let claimed = job_claim()?;
+    if !claimed.get("ok").and_then(|x| x.as_bool()).unwrap_or(false) {
+        return Ok(serde_json::json!({"ok": true, "ran": false, "message": "tidak ada job pending"}));
+    }
+    let id = claimed.get("id").and_then(|x| x.as_i64()).ok_or("job id tidak valid")?;
+    let kind = claimed.get("kind").and_then(|x| x.as_str()).unwrap_or("").to_string();
+    let payload_raw = claimed.get("payload").and_then(|x| x.as_str()).unwrap_or("").to_string();
+    let payload = serde_json::from_str::<serde_json::Value>(&payload_raw)
+        .unwrap_or_else(|_| serde_json::json!({"value": payload_raw}));
+
+    let execution: Result<serde_json::Value, String> = (|| match kind.as_str() {
+        "scan" => {
+            let folder = payload.get("folder").or_else(|| payload.get("root")).or_else(|| payload.get("value"))
+                .and_then(|x| x.as_str()).ok_or("payload scan harus punya folder/root")?;
+            core_scan(folder.to_string())
+        }
+        "duplicates" => {
+            let folder = payload.get("folder").or_else(|| payload.get("root")).or_else(|| payload.get("value"))
+                .and_then(|x| x.as_str()).ok_or("payload duplicates harus punya folder/root")?;
+            core_duplicates(folder.to_string(), payload.get("min_size").and_then(|x| x.as_i64()).unwrap_or(1))
+        }
+        "ai" => {
+            let argv = payload.get("argv").and_then(|x| x.as_array()).map(|a|
+                a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect::<Vec<_>>()
+            ).ok_or("payload ai harus punya argv[]")?;
+            ai_engine(argv)
+        }
+        "organize" => {
+            org_run(
+                payload.get("kind").and_then(|x| x.as_str()).unwrap_or("videos").to_string(),
+                payload.get("folder").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                payload.get("files").and_then(|x| x.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()).unwrap_or_default(),
+                payload.get("dest").and_then(|x| x.as_str()).unwrap_or("").to_string(),
+                payload.get("content").and_then(|x| x.as_array()).map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect()).unwrap_or_default(),
+                payload.get("copy").and_then(|x| x.as_bool()).unwrap_or(false),
+                payload.get("dated").and_then(|x| x.as_bool()).unwrap_or(false),
+                payload.get("junk").and_then(|x| x.as_bool()).unwrap_or(false),
+                payload.get("prune").and_then(|x| x.as_bool()).unwrap_or(false),
+                payload.get("limit").and_then(|x| x.as_i64()).unwrap_or(0),
+                payload.get("apply").and_then(|x| x.as_bool()).unwrap_or(false),
+            )
+        }
+        _ => Err(format!("jenis job tidak didukung oleh worker desktop: {kind}")),
+    })();
+
+    match execution {
+        Ok(result) => {
+            let result_text = serde_json::to_string(&result).unwrap_or_else(|_| result.to_string());
+            let final_status = if result.get("ok").and_then(|x| x.as_bool()).unwrap_or(true) { "done" } else { "failed" };
+            let finished = job_finish(id, final_status.into(), result_text)?;
+            Ok(serde_json::json!({"ok": final_status == "done", "ran": true, "id": id, "kind": kind, "result": result, "finish": finished}))
+        }
+        Err(err) => {
+            let finished = job_finish(id, "failed".into(), err.clone())?;
+            log_activity("job-error", &format!("#{id} {kind}: {err}"));
+            Ok(serde_json::json!({"ok": false, "ran": true, "id": id, "kind": kind, "error": err, "finish": finished}))
+        }
+    }
 }
 
 fn main() {
@@ -704,9 +938,10 @@ fn main() {
             activity_export, report_export,
             core_doctor, audit_list, job_list, job_pause, job_resume, job_cancel,
             prop_propose, prop_list, prop_preview, prop_approve, prop_reject,
-            videos_list, org_run,
-            video_inspect, video_open, video_show_folder, video_rename, video_move,
-            video_quarantine, video_save_annotation
+            videos_list, folders_list, org_run,
+            pick_video_file, pick_image_file, pick_folder, video_inspect, video_duplicate_check,
+            video_open, video_show_folder, file_info, video_rename, video_move,
+            video_quarantine, video_save_annotation, job_run_once
         ])
         .run(tauri::generate_context!())
         .expect("Tauri gagal jalan");

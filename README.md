@@ -14,8 +14,7 @@ ai-organizer-pro\
   AIOrganizerPro-web.exe  launcher mode website (server + browser, tanpa console)
   aiorganizer.exe     core C++ (scan/duplikat/jobs/proposal/audit/doctor)
   organizer-cli.exe   engine Python beku (scan/karantina/analyze LLM)
-  ai-yolo-project/    KLASIFIKASI YOLO (kanonis, jangan diubah): train.py/run.py/config.py + runs/*/best.pt
-  engine-py/app/ai/yolo_bridge.py  jembatan organizer -> YOLO (mode: yolo-classify, dry-run default)
+  legacy\             3 exe lama sebagai cadangan
   PRO.cmd             dispatcher: gui|stats|scan|dup|doctor|migrate|db|build
   scripts/            run-server, db-stats/query/shell, scan, duplicates,
                       build-core, migrate, install-startup, doctor (.ps1)
