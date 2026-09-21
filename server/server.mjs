@@ -339,6 +339,30 @@ const server = createServer(async (req, res) => {
       const b = await bodyJson(req);
       return send(res, 200, await callSidecar({ cmd: "reason", path: b.path || "" }, 60000));
     }
+    // ---- YOLO classify + training (web-mode; native punya padanan invoke) ----
+    if (req.method === "POST" && u.pathname === "/api/yolo") {
+      const b = await bodyJson(req);
+      const r = await callSidecar({ cmd: "yolo-classify", root: b.root || "", limit: Number(b.limit) || 50, model: b.model || "" }, 10 * 60 * 1000);
+      if (r.ok) await logActivity("yolo-classify", `${b.root || ""} -> ${r.total ?? 0}`);
+      return send(res, 200, r);
+    }
+    if (req.method === "GET" && u.pathname === "/api/yolo/status") {
+      return send(res, 200, await callSidecar({ cmd: "yolo-status" }, 60000));
+    }
+    if (req.method === "POST" && u.pathname === "/api/yolo/train/start") {
+      const b = await bodyJson(req);
+      const r = await callSidecar({ cmd: "yolo-train-start", epochs: Number(b.epochs) || 150, batch: Number(b.batch) || 16, model_size: b.model_size || "m", imgsz: Number(b.imgsz) || 288, patience: Number(b.patience) || 25 }, 60000);
+      if (r.ok) await logActivity("yolo-train-start", `pid ${r.pid}`);
+      return send(res, 200, r);
+    }
+    if (req.method === "GET" && u.pathname === "/api/yolo/train/status") {
+      return send(res, 200, await callSidecar({ cmd: "yolo-train-status" }, 30000));
+    }
+    if (req.method === "POST" && u.pathname === "/api/yolo/train/stop") {
+      const r = await callSidecar({ cmd: "yolo-train-stop" }, 30000);
+      await logActivity("yolo-train-stop", "");
+      return send(res, 200, r);
+    }
     if (req.method === "POST" && u.pathname === "/api/jobs/enqueue") {
       const b = await bodyJson(req);
       const r = await runCore(["job-enqueue", b.kind || "scan", b.payload || "", "--db", resolveDb(), "--json", "--actor", "gui"]);

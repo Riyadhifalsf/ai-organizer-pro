@@ -95,3 +95,12 @@ Build Tauri/Rust penuh tidak dapat dikompilasi di lingkungan pengeditan ini kare
 - Added native photo file picker and generic file metadata command.
 - Enabled Tauri global API + asset protocol configuration and media/image CSP entries.
 - Kept destructive actions explicit and audited; unsupported codecs fall back to the Windows player rather than pretending the in-app player can decode them.
+
+## Tambahan sesi lanjutan (2026-09-22)
+
+- Mode desktop difokuskan: cargo check LOLOS (bug build diperbaiki: fitur cargo protocol-asset didaftarkan di src-tauri/Cargo.toml agar cocok dengan assetProtocol di tauri.conf.json).
+- Bug anotasi cross-mode: kunci dinormalisasi (prefix verbatim \\?\. di-strip) agar tag/catatan dari sidecar Python terbaca di Tauri dan sebaliknya.
+- Bug quarantine nesting: karantina file yang sudah di 99_To-Delete kini no-op already-quarantined (Rust + Python).
+- Foto setara video: rename/pindah/karantina/tag/catatan + klasifikasi YOLO per foto + anotasi tampil di viewer (bug chooseImage() belum didefinisikan diperbaiki).
+- Preview video cerdas: kontainer tak didukung WebView (mkv/avi/mts/...) langsung ke panel Player Windows; mp4/webm tetap diputar internal + thumbnail.
+- Training YOLO dari aplikasi: kartu AI Training (status/dataset/epoch-batch-model-imgsz-patience, start/stop, polling log 4 dtk). Mesin: sidecar yolo-status/train-start(train berjalan detached + pid file + log train_app.log)/train-status/train-stop + command Tauri yolo_status/yolo_train_start/yolo_train_status/yolo_train_stop/yolo_classify. train.py tidak diubah (override via wrapper runpy).

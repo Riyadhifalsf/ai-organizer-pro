@@ -625,15 +625,36 @@ fn write_annotations(all: &serde_json::Map<String, serde_json::Value>) -> Result
     Ok(())
 }
 
+// Kunci anotasi dinormalisasi: Rust canonicalize menghasilkan prefix `\\?\`
+// sedangkan sidecar Python memakai abspath biasa. Kedua bentuk diterima agar
+// anotasi yang ditulis satu mode terbaca di mode lain.
+fn normalize_annot_key(path: &str) -> String {
+    let t = path.trim();
+    for prefix in ["\\\\?\\", "\\\\.\\"] {
+        if let Some(rest) = t.strip_prefix(prefix) {
+            return rest.to_string();
+        }
+    }
+    t.to_string()
+}
+
 fn video_annotation_for(path: &str) -> serde_json::Value {
-    read_annotations().get(path).cloned()
+    let all = read_annotations();
+    let norm = normalize_annot_key(path);
+    all.get(path).or_else(|| all.get(&norm)).cloned()
         .unwrap_or_else(|| serde_json::json!({"tags": [], "note": ""}))
 }
 
 fn migrate_video_annotation(old_path: &str, new_path: &str) -> Result<(), String> {
     let mut all = read_annotations();
-    if let Some(value) = all.remove(old_path) {
-        all.insert(new_path.to_string(), value);
+    let mut moved = false;
+    for key in [old_path.to_string(), normalize_annot_key(old_path)] {
+        if let Some(value) = all.remove(&key) {
+            all.insert(normalize_annot_key(new_path), value);
+            moved = true;
+        }
+    }
+    if moved {
         write_annotations(&all)?;
     }
     Ok(())
@@ -840,7 +861,12 @@ fn video_move(path: String, destination: String) -> Result<serde_json::Value, St
 #[tauri::command]
 fn video_quarantine(path: String) -> Result<serde_json::Value, String> {
     let source = checked_video_path(&path)?;
-    let folder = source.parent().ok_or("folder sumber tidak ada")?.join("99_To-Delete");
+    let parent = source.parent().ok_or("folder sumber tidak ada")?;
+    // Sudah di karantina: no-op yang jujur, cegah nesting 99_To-Delete/99_To-Delete.
+    if parent.file_name().and_then(|x| x.to_str()) == Some("99_To-Delete") {
+        return Ok(serde_json::json!({"ok": true, "path": source.to_string_lossy(), "mode": "already-quarantined"}));
+    }
+    let folder = parent.join("99_To-Delete");
     std::fs::create_dir_all(&folder).map_err(|e| e.to_string())?;
     let mut target = folder.join(source.file_name().ok_or("nama file tidak valid")?);
     let mut n = 1;
@@ -855,7 +881,7 @@ fn video_quarantine(path: String) -> Result<serde_json::Value, String> {
 #[tauri::command]
 fn video_save_annotation(path: String, tags: Vec<String>, note: String) -> Result<serde_json::Value, String> {
     let p = checked_video_path(&path)?;
-    let key = p.to_string_lossy().into_owned();
+    let key = normalize_annot_key(&p.to_string_lossy());
     let mut all = read_annotations();
     let clean_tags: Vec<String> = tags.into_iter().map(|x| x.trim().to_string()).filter(|x| !x.is_empty()).take(30).collect();
     all.insert(key.clone(), serde_json::json!({"tags": clean_tags, "note": note.chars().take(5000).collect::<String>()}));
@@ -929,6 +955,45 @@ fn job_run_once() -> Result<serde_json::Value, String> {
     }
 }
 
+// ---- YOLO classify + training (didelegasikan ke sidecar Python) ----
+#[tauri::command]
+fn yolo_classify(root: String, limit: i64, model: String) -> Result<serde_json::Value, String> {
+    let r = call_sidecar("yolo-classify", serde_json::json!({"root": root, "limit": limit, "model": model}));
+    if let Ok(v) = &r {
+        log_activity("yolo-classify", &format!("{} -> {} prediksi", root, v.get("total").and_then(|x| x.as_i64()).unwrap_or(0)));
+    }
+    r
+}
+
+#[tauri::command]
+fn yolo_status() -> Result<serde_json::Value, String> {
+    call_sidecar("yolo-status", serde_json::json!({}))
+}
+
+#[tauri::command]
+fn yolo_train_start(epochs: i64, batch: i64, model_size: String, imgsz: i64, patience: i64) -> Result<serde_json::Value, String> {
+    let r = call_sidecar("yolo-train-start", serde_json::json!({
+        "epochs": epochs, "batch": batch, "model_size": model_size,
+        "imgsz": imgsz, "patience": patience,
+    }));
+    if let Ok(v) = &r {
+        log_activity("yolo-train-start", &format!("pid {}", v.get("pid").and_then(|x| x.as_i64()).unwrap_or(0)));
+    }
+    r
+}
+
+#[tauri::command]
+fn yolo_train_status() -> Result<serde_json::Value, String> {
+    call_sidecar("yolo-train-status", serde_json::json!({}))
+}
+
+#[tauri::command]
+fn yolo_train_stop() -> Result<serde_json::Value, String> {
+    let r = call_sidecar("yolo-train-stop", serde_json::json!({}));
+    log_activity("yolo-train-stop", "");
+    r
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
@@ -941,7 +1006,8 @@ fn main() {
             videos_list, folders_list, org_run,
             pick_video_file, pick_image_file, pick_folder, video_inspect, video_duplicate_check,
             video_open, video_show_folder, file_info, video_rename, video_move,
-            video_quarantine, video_save_annotation, job_run_once
+            video_quarantine, video_save_annotation, job_run_once,
+            yolo_classify, yolo_status, yolo_train_start, yolo_train_status, yolo_train_stop
         ])
         .run(tauri::generate_context!())
         .expect("Tauri gagal jalan");

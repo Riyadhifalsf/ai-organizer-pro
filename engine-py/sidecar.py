@@ -467,7 +467,10 @@ def cmd_video_move(path, destination):
 def cmd_video_quarantine(path):
     try:
         src = _checked(path)
-        folder = os.path.join(os.path.dirname(src), "99_To-Delete")
+        parent = os.path.dirname(src)
+        if os.path.basename(parent) == "99_To-Delete":
+            return {"ok": True, "path": src, "mode": "already-quarantined"}
+        folder = os.path.join(parent, "99_To-Delete")
         os.makedirs(folder, exist_ok=True)
         stem, ext = os.path.splitext(os.path.basename(src))
         target = os.path.join(folder, os.path.basename(src))
@@ -547,6 +550,200 @@ def cmd_yolo(root, limit=50, model=""):
         return {"ok": False, "error": str(e)}
 
 
+# ---------- YOLO training dari aplikasi (detached, log ke file) ----------
+def _train_pid_path(project):
+    return os.path.join(project, "results", ".train_app.json")
+
+
+def _pid_alive(pid):
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return False
+    if pid <= 0:
+        return False
+    try:
+        import ctypes
+        k32 = ctypes.windll.kernel32
+        h = k32.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not h:
+            return False
+        code = ctypes.c_ulong(0)
+        alive = k32.GetExitCodeProcess(h, ctypes.byref(code)) and code.value == 259
+        k32.CloseHandle(h)
+        return bool(alive)
+    except Exception:
+        try:
+            import subprocess
+            r = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+                               capture_output=True, text=True, timeout=15)
+            return str(pid) in (r.stdout or "")
+        except Exception:
+            return False
+
+
+def _train_state(project):
+    try:
+        with open(_train_pid_path(project), encoding="utf-8") as f:
+            st = json.load(f)
+    except Exception:
+        return {"running": False}
+    pid = st.get("pid")
+    if _pid_alive(pid):
+        st["running"] = True
+        return st
+    return {"running": False, "last_pid": pid, "last_params": st.get("params", {})}
+
+
+def cmd_yolo_status():
+    try:
+        from app.ai import yolo_bridge
+        project = yolo_bridge.project_root()
+        if not project:
+            return {"ok": False, "error": "ai-yolo-project tidak ditemukan"}
+        ok, info = yolo_bridge.is_available()
+        raw = os.path.join(project, "dataset_raw")
+        classes = {}
+        if os.path.isdir(raw):
+            for nm in sorted(os.listdir(raw)):
+                d = os.path.join(raw, nm)
+                if os.path.isdir(d):
+                    try:
+                        classes[nm] = sum(1 for f in os.listdir(d)
+                                          if os.path.isfile(os.path.join(d, f)))
+                    except OSError:
+                        classes[nm] = 0
+        return {"ok": True, "project": project,
+                "ready": bool(ok), "ready_note": "" if ok else info.get("reason", ""),
+                "model": info.get("MODEL", ""),
+                "classes": classes, "class_total": sum(classes.values()),
+                "train": _train_state(project)}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def cmd_yolo_train_start(epochs=150, batch=16, model_size="m", imgsz=288, patience=25):
+    try:
+        from app.ai import yolo_bridge
+        project = yolo_bridge.project_root()
+        if not project:
+            return {"ok": False, "error": "ai-yolo-project tidak ditemukan"}
+        try:
+            import ultralytics  # noqa: F401 — wajib ada sebelum spawn
+        except ImportError:
+            return {"ok": False,
+                    "error": "ultralytics belum install. Jalankan: python setup.py --install di ai-yolo-project"}
+        st = _train_state(project)
+        if st.get("running"):
+            return {"ok": False, "error": f"training sudah berjalan (pid {st.get('pid')})"}
+        try:
+            epochs = max(1, min(int(epochs or 150), 2000))
+            batch = max(1, min(int(batch or 16), 512))
+            patience = max(0, min(int(patience or 0), 500))
+            imgsz = max(64, min(int(imgsz or 288), 1280))
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "parameter angka tidak valid"}
+        model_size = str(model_size or "m").lower().strip()
+        if model_size not in ("n", "s", "m", "l", "x"):
+            return {"ok": False, "error": "model_size harus salah satu: n/s/m/l/x"}
+        raw = os.path.join(project, "dataset_raw")
+        n_img = 0
+        if os.path.isdir(raw):
+            for _, _, files in os.walk(raw):
+                n_img += len(files)
+        if n_img == 0:
+            return {"ok": False,
+                    "error": "dataset_raw kosong — isi dulu tiap kelas dengan foto (lihat config.py)"}
+        import subprocess
+        # train.py tidak terima argumen: override konstanta config via wrapper,
+        # tanpa mengubah file YOLO mana pun.
+        wrapper = (
+            "import runpy, sys; "
+            f"sys.path.insert(0, {project!r}); "
+            "import config as C; "
+            f"C.EPOCHS={epochs}; C.BATCH={batch}; "
+            f"C.MODEL_SIZE={model_size!r}; C.IMGSZ={imgsz}; C.PATIENCE={patience}; "
+            f"runpy.run_path({os.path.join(project, 'train.py')!r}, run_name='__main__')"
+        )
+        os.makedirs(os.path.join(project, "results"), exist_ok=True)
+        log_path = os.path.join(project, "results", "train_app.log")
+        log_f = open(log_path, "a", encoding="utf-8", errors="replace")
+        log_f.write(f"\n===== TRAIN DIMULAI epochs={epochs} batch={batch} "
+                    f"model={model_size} imgsz={imgsz} patience={patience} =====\n")
+        log_f.flush()
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0) | getattr(
+            subprocess, "DETACHED_PROCESS", 0)
+        proc = subprocess.Popen(
+            [sys.executable, "-u", "-c", wrapper], cwd=project,
+            stdout=log_f, stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL, creationflags=flags, close_fds=True)
+        log_f.close()
+        params = {"epochs": epochs, "batch": batch, "model_size": model_size,
+                  "imgsz": imgsz, "patience": patience}
+        try:
+            with open(_train_pid_path(project), "w", encoding="utf-8") as f:
+                import time
+                json.dump({"pid": proc.pid, "started": int(time.time()),
+                           "params": params}, f)
+        except OSError:
+            pass
+        return {"ok": True, "pid": proc.pid, "params": params, "log": log_path}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def cmd_yolo_train_status():
+    try:
+        from app.ai import yolo_bridge
+        project = yolo_bridge.project_root()
+        if not project:
+            return {"ok": False, "error": "ai-yolo-project tidak ditemukan"}
+        st = _train_state(project)
+        tail = []
+        log_path = os.path.join(project, "results", "train_app.log")
+        try:
+            with open(log_path, encoding="utf-8", errors="replace") as f:
+                lines = f.readlines()
+            tail = [ln.rstrip("\n") for ln in lines[-40:]]
+        except OSError:
+            pass
+        st.update({"ok": True, "log": log_path, "log_tail": tail})
+        return st
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+def cmd_yolo_train_stop():
+    try:
+        from app.ai import yolo_bridge
+        project = yolo_bridge.project_root()
+        if not project:
+            return {"ok": False, "error": "ai-yolo-project tidak ditemukan"}
+        st = _train_state(project)
+        if not st.get("running"):
+            try:
+                os.remove(_train_pid_path(project))
+            except OSError:
+                pass
+            return {"ok": True, "stopped": False, "note": "tidak ada training berjalan"}
+        import subprocess
+        subprocess.run(["taskkill", "/PID", str(st["pid"]), "/T", "/F"],
+                       capture_output=True, timeout=30)
+        try:
+            os.remove(_train_pid_path(project))
+        except OSError:
+            pass
+        try:
+            with open(os.path.join(project, "results", "train_app.log"),
+                      "a", encoding="utf-8") as f:
+                f.write("===== TRAIN DIHENTIKAN DARI APLIKASI =====\n")
+        except OSError:
+            pass
+        return {"ok": True, "stopped": True, "pid": st["pid"]}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 def handle(req):
     cmd = req.get("cmd", "")
     if cmd == "ping":
@@ -586,6 +783,16 @@ def handle(req):
     if cmd == "yolo-classify":
         return cmd_yolo(req.get("root", ""), req.get("limit", 50),
                         req.get("model", ""))
+    if cmd == "yolo-status":
+        return cmd_yolo_status()
+    if cmd == "yolo-train-start":
+        return cmd_yolo_train_start(req.get("epochs", 150), req.get("batch", 16),
+                                    req.get("model_size", "m"), req.get("imgsz", 288),
+                                    req.get("patience", 25))
+    if cmd == "yolo-train-status":
+        return cmd_yolo_train_status()
+    if cmd == "yolo-train-stop":
+        return cmd_yolo_train_stop()
     return {"ok": False, "error": f"cmd tidak dikenal: {cmd}"}
 
 

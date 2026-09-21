@@ -44,6 +44,11 @@ async function apiNative(path,b,m){
   if(path==="/api/duplicates")return invoke("core_duplicates",{folder:b.folder,min_size:Number(b.minSize||1)});
   if(path==="/api/move-approved")return invoke("core_move_approved",{group:Number(b.group),keep:b.keep,to:b.to});
   if(path==="/api/ai"){const r=await invoke("ai_engine",{argv:b.argv||[]});if(r&&r.output)r.output=r.output.slice(-10000);return r;}
+  if(path==="/api/yolo")return invoke("yolo_classify",{root:b.root||"",limit:Number(b.limit||50),model:b.model||""});
+  if(path==="/api/yolo/status")return invoke("yolo_status");
+  if(path==="/api/yolo/train/start")return invoke("yolo_train_start",{epochs:Number(b.epochs||150),batch:Number(b.batch||16),model_size:String(b.model_size||"m"),imgsz:Number(b.imgsz||288),patience:Number(b.patience||25)});
+  if(path==="/api/yolo/train/status")return invoke("yolo_train_status");
+  if(path==="/api/yolo/train/stop")return invoke("yolo_train_stop");
   if(path==="/api/jobs/enqueue")return invoke("job_enqueue",{kind:b.kind||"scan",payload:b.payload||""});
   if(path==="/api/jobs/claim")return invoke("job_claim");
   if(path==="/api/jobs/run")return invoke("job_run_once");
@@ -120,6 +125,10 @@ async function chooseFolder(targetId){
 async function chooseVideo(){
   if(NATIVE){const r=await api("GET","/api/video/pick");if(r.ok&&r.path){$("video-path").value=r.path;return r.path;}return "";}
   const v=await openDialog({title:"Pilih video",message:"Masukkan path video lokal.",value:$("video-path").value,placeholder:"D:\\Videos\\video.mp4"});return v||"";
+}
+async function chooseImage(){
+  if(NATIVE){const r=await api("GET","/api/photo/pick");if(r.ok&&r.path)return r.path;return "";}
+  const v=await openDialog({title:"Pilih foto",message:"Masukkan path foto lokal.",value:state.currentPhoto?.path||"",placeholder:"D:\\Photos\\foto.jpg"});return v||"";
 }
 function setRoot(root){
   state.root=String(root||"").trim();
@@ -260,8 +269,19 @@ function updateVideoPills(r){const ext=(r.extension||"").toUpperCase();const pro
 function renderTags(){const a=state.current?.annotation||{tags:[],note:""};const tags=a.tags||[];$("tag-list").innerHTML=tags.length?tags.map((x,i)=>`<span class="${i===0?"purple":""}">${esc(x)}</span>`).join(""):'<span class="mut">Belum ada tag</span>';$("note-text").textContent=a.note||"Belum ada catatan.";}
 function setAnalysis(r){const probe=r.probe||{},v=probe.video||{},a=probe.audio||{};const ok=!!probe.ok;$("video-resolution").textContent=v.width?`${v.width} × ${v.height}`:"—";$("video-codec").textContent=v.codec||"—";$("audio-codec").textContent=a.codec||"Tidak ada";$("video-fps").textContent=v.fps?`${v.fps} fps`:"—";$("video-aspect").textContent=v.aspect||"—";$("video-profile").textContent=v.profile||"—";$("video-duration").textContent=probe.duration?fmtDuration(probe.duration):"—";$("check-health").textContent=ok?"Normal":"Perlu diperiksa";$("check-metadata").textContent=(v.width&&v.height&&v.codec)?"Terbaca":"Terbatas";$("check-size").textContent=fmtBytes(r.size);$("check-type").textContent=(r.extension||"VIDEO").toUpperCase();$("analysis-status").textContent=ok?"✓ File normal":"! Metadata / stream perlu diperiksa";$("analysis-status").className=`analysis-state ${ok?"ok":"bad"}`;const items=ok?["Stream video dapat dibaca",v.codec?`Codec ${v.codec}${v.profile&&v.profile!=="—"?` (${v.profile})`:""}`:"Codec tidak tersedia",a.codec?`Audio ${a.codec}`:"Tanpa stream audio"]:[probe.error||"ffprobe tidak dapat membaca file","Gunakan player eksternal untuk pembuktian tambahan","Pastikan ffprobe tersedia di paket aplikasi"];$("analysis-list").innerHTML=items.map(x=>`<li>${esc(x)}</li>`).join("");$("analysis-detail").textContent=ok?`Durasi ${fmtDuration(probe.duration)} • ${v.width||"?"}×${v.height||"?"} • ${v.codec||"?"} • ${a.codec||"tanpa audio"}.`:`Probe gagal: ${probe.error||"tidak ada detail"}.`;
 }
-function showVideoInPlayer(path){
+const PLAYABLE_EXTS=new Set(["mp4","m4v","webm","ogv","mov"]);
+function showVideoInPlayer(path,ext=""){
   const player=$("video-player"),empty=document.querySelector(".video-empty"),fallback=$("video-fallback-actions"),status=$("player-status");
+  const e=String(ext||path.split(".").pop()||"").toLowerCase();
+  // WebView2 (Chromium) hanya memutar MP4/H.264 & WebM andal; kontainer lain
+  // (mkv/avi/mts/m2ts/wmv) langsung diarahkan ke Player Windows + info file.
+  if(!PLAYABLE_EXTS.has(e)){
+    try{player.pause();}catch{} player.removeAttribute("src");player.load();player.hidden=true;empty.hidden=false;fallback.hidden=false;
+    $("video-empty-title").textContent=filename(path);
+    $("video-empty-help").textContent=`Format .${e.toUpperCase()} tidak diputar di WebView — metadata tetap tampil; gunakan Player Windows.`;
+    status.textContent="Pratinjau WebView tidak mendukung kontainer ini.";
+    return;
+  }
   const src=toAssetUrl(path);
   player.hidden=false;empty.hidden=true;fallback.hidden=true;status.textContent="Memuat player internal…";
   player.onerror=()=>{
@@ -282,7 +302,7 @@ $("video-fullscreen").onclick=()=>{$("video-player").requestFullscreen?.().catch
 $("video-fallback-open").onclick=()=>videoAction("open");
 async function loadVideo(path=$("video-path").value.trim()){
   if(!path)return toast("Pilih atau masukkan path video terlebih dahulu.","warn");
-  try{const r=await api("POST","/api/video/inspect",{path}); if(!r.ok)throw new Error(r.error||"video tidak dapat dibaca"); state.current=r;$("video-path").value=r.path;$("video-path-label").textContent=r.path;$("crumb-file").textContent=r.name;$("video-title").textContent=r.name;$("video-name").textContent=r.name;$("video-size").textContent=fmtBytes(r.size);$("video-modified").textContent=fmtDate(r.modified_ms);updateVideoPills(r);setAnalysis(r);renderTags();showVideoInPlayer(r.path);$("video-empty-title").textContent=r.name;updateFolderSummary(r.path);switchView("dash");return r;}catch(e){toast("Video tidak dapat dimuat: "+e.message,"bad");return null;}}
+  try{const r=await api("POST","/api/video/inspect",{path}); if(!r.ok)throw new Error(r.error||"video tidak dapat dibaca"); state.current=r;$("video-path").value=r.path;$("video-path-label").textContent=r.path;$("crumb-file").textContent=r.name;$("video-title").textContent=r.name;$("video-name").textContent=r.name;$("video-size").textContent=fmtBytes(r.size);$("video-modified").textContent=fmtDate(r.modified_ms);updateVideoPills(r);setAnalysis(r);renderTags();showVideoInPlayer(r.path,r.extension);$("video-empty-title").textContent=r.name;updateFolderSummary(r.path);switchView("dash");return r;}catch(e){toast("Video tidak dapat dimuat: "+e.message,"bad");return null;}}
 function updateFolderSummary(path){const folder=dirname(path);const rows=state.videos.filter(v=>samePath(dirname(v.path),folder));const size=rows.reduce((a,v)=>a+(Number(v.size)||0),0);$("sum-count").textContent=rows.length||1;$("sum-size").textContent=fmtBytes(size||state.current?.size||0);$("sum-path").textContent=folder;}
 function updateCurrentPath(newPath){if(!state.current)return;state.current.path=newPath;state.current.name=filename(newPath);$("video-path").value=newPath;$("crumb-file").textContent=state.current.name;$("video-title").textContent=state.current.name;}
 async function selectVideo(path){$("video-path").value=path;await loadVideo(path);}
@@ -344,8 +364,8 @@ function selectPhoto(path){
   };
   img.onerror=()=>{img.hidden=true;empty.hidden=false;$("photo-empty").querySelector("b").textContent="Format foto tidak didukung WebView";$("photo-empty").querySelector("span").textContent="Gunakan tombol Buka untuk aplikasi foto Windows.";};
   img.src=toAssetUrl(path);
-  $("photo-view-name").textContent=filename(path);$("photo-meta-name").textContent=filename(path);$("photo-meta-path").textContent=path;$("photo-meta-size").textContent=fmtBytes(p.size);$("photo-meta-modified").textContent="—";$("photo-meta-type").textContent=(filename(path).split(".").pop()||"—").toUpperCase();
-  if(p.path){api("POST","/api/file/info",{path:p.path}).then(r=>{$("photo-meta-modified").textContent=fmtDate(r.modified_ms);}).catch(()=>{});}
+  $("photo-view-name").textContent=filename(path);$("photo-meta-name").textContent=filename(path);$("photo-meta-path").textContent=path;$("photo-meta-size").textContent=fmtBytes(p.size);$("photo-meta-modified").textContent="—";$("photo-meta-type").textContent=(filename(path).split(".").pop()||"—").toUpperCase();$("photo-annot").textContent="Memuat tag…";$("photo-yolo-out").textContent="";
+  if(p.path){api("POST","/api/file/info",{path:p.path}).then(r=>{$("photo-meta-modified").textContent=fmtDate(r.modified_ms);}).catch(()=>{});refreshPhotoAnnot(path);}
 }
 $("photo-filter").oninput=renderPhotos;
 $("photo-folder-browse").onclick=async()=>chooseFolder("photo-folder");
@@ -356,6 +376,24 @@ $("photo-fit").onclick=()=>{const img=$("photo-image");img.style.width="auto";im
 $("photo-zoom-in").onclick=()=>setPhotoZoom((state.photoZoom||100)+25);
 $("photo-zoom-out").onclick=()=>setPhotoZoom((state.photoZoom||100)-25);
 $("photo-open-external").onclick=async()=>{if(!state.currentPhoto)return toast("Pilih foto dahulu.","warn");try{const r=await api("POST","/api/video/open",{path:state.currentPhoto.path});if(!r.ok)throw new Error(r.error||"gagal membuka foto");}catch(e){toast("Foto tidak bisa dibuka: "+e.message,"bad");}};
+function photoRequired(){if(!state.currentPhoto?.path){toast("Pilih foto dahulu.","warn");return false;}return true;}
+async function refreshPhotoAnnot(path){
+  try{const r=await api("POST","/api/video/inspect",{path});const a=r.annotation||{tags:[],note:""};state.currentPhoto.annotation=a;
+    $("photo-annot").textContent=(a.tags?.length?("Tag: "+a.tags.join(", ")):"Belum ada tag")+((a.note)?(" • "+a.note):"");
+  }catch{$("photo-annot").textContent="Belum ada tag/catatan.";}
+}
+async function photoAction(action){
+  if(!photoRequired())return;const path=state.currentPhoto.path;
+  try{
+    if(action==="rename"){const v=await openDialog({title:"Rename foto",message:"Nama file baru. Ekstensi dipertahankan bila tidak ditulis.",value:filename(path),placeholder:"nama-foto"});if(!v)return;const r=await api("POST","/api/video/rename",{path,new_name:v.trim()});if(!r.ok)throw new Error(r.error||"rename gagal");state.currentPhoto.path=r.path;selectPhoto(r.path);await loadPhotos(state.root);toast("Foto berhasil di-rename.","ok");}
+    else if(action==="move"){const v=await openDialog({title:"Pindahkan foto",message:"Folder tujuan dibuat bila belum ada.",value:dirname(path),placeholder:"D:\\Photos\\Baru"});if(!v)return;const r=await api("POST","/api/video/move",{path,destination:v.trim()});if(!r.ok)throw new Error(r.error||"move gagal");state.currentPhoto.path=r.path;selectPhoto(r.path);await loadPhotos(state.root);toast(`Foto dipindahkan (${r.mode||"terverifikasi"}).`,"ok");}
+    else if(action==="delete"){const ok=await openDialog({title:"Karantina foto",message:"File TIDAK dihapus permanen — dipindah ke 99_To-Delete.",kind:"confirm",okText:"Karantina"});if(ok===null)return;const r=await api("POST","/api/video/quarantine",{path});if(!r.ok)throw new Error(r.error||"karantina gagal");state.currentPhoto=null;$("photo-image").hidden=true;$("photo-empty").hidden=false;await loadPhotos(state.root);toast(r.mode==="already-quarantined"?"Foto sudah di karantina.":"Foto dipindahkan ke 99_To-Delete.","ok");}
+    else if(action==="tags"){const cur=state.currentPhoto.annotation?.tags||[];const v=await openDialog({title:"Edit tag foto",message:"Pisahkan dengan koma.",value:cur.join(", "),placeholder:"liburan, keluarga"});if(v===null)return;const next=v.split(",").map(x=>x.trim()).filter(Boolean);const r=await api("POST","/api/video/annotation",{path,tags:next,note:state.currentPhoto.annotation?.note||""});if(!r.ok)throw new Error(r.error||"tag gagal");await refreshPhotoAnnot(path);toast("Tag foto disimpan.","ok");}
+    else if(action==="note"){const v=await openDialog({title:"Edit catatan foto",message:"Catatan lokal per file.",kind:"textarea",value:state.currentPhoto.annotation?.note||"",placeholder:"Catatan…"});if(v===null)return;const r=await api("POST","/api/video/annotation",{path,tags:state.currentPhoto.annotation?.tags||[],note:v});if(!r.ok)throw new Error(r.error||"catatan gagal");await refreshPhotoAnnot(path);toast("Catatan foto disimpan.","ok");}
+    else if(action==="yolo"){showBusy($("photo-yolo"),true,"Mengklasifikasi…");try{const r=await api("POST","/api/yolo",{root:dirname(path),limit:500});if(!r.ok)throw new Error(r.error||"YOLO tidak siap");const row=(r.rows||[]).find(x=>samePath(x.path,path));$("photo-yolo-out").textContent=row?`YOLO: ${row.kelas} (${row.confidence}, ${row.level}) • model ${filename(r.model)}`:"Foto ini tidak ter-cover (di luar 500 file pertama folder).";toast(row?"Klasifikasi selesai.":"Di luar jangkauan limit.","ok");}finally{showBusy($("photo-yolo"),false);}}
+  }catch(e){toast("Aksi foto gagal: "+e.message,"bad",5000);}
+}
+$("photo-rename").onclick=()=>photoAction("rename");$("photo-move").onclick=()=>photoAction("move");$("photo-quarantine").onclick=()=>photoAction("delete");$("photo-tags").onclick=()=>photoAction("tags");$("photo-note").onclick=()=>photoAction("note");$("photo-yolo").onclick=()=>photoAction("yolo");
 
 let lastGroups=[];
 $("dup-go").onclick=async()=>{const folder=$("dup-folder").value.trim();if(!folder)return toast("Pilih folder duplikat.","warn");showBusy($("dup-go"),true,"Hashing…");$("dup-list").innerHTML='<div class="empty-state">Menghitung hash bertahap…</div>';try{const r=await api("POST","/api/duplicates",{folder,minSize:Number($("dup-min").value)||1});if(!r.ok)throw new Error(r.error||r.raw||"scan duplikat gagal");lastGroups=r.groups||[];renderDupGroups(folder);await stats();}catch(e){$("dup-list").innerHTML=`<div class="empty-state">Gagal: ${esc(e.message)}</div>`;toast("Duplikat gagal: "+e.message,"bad");}finally{showBusy($("dup-go"),false);}};
@@ -411,6 +449,35 @@ $("org-dl").onclick=async()=>{if(!state.lastOrgReport)return;const r=await api("
 
 $("ai-go").onclick=async()=>{const folder=$("ai-folder").value.trim();if(!folder)return toast("Isi folder AI.","warn");const mode=$("ai-mode").value;const argv=[mode,folder];if($("dry").checked)argv.push("--dry-run");if(mode==="analyze"&&Number($("ai-limit").value)>0)argv.push("--limit",$("ai-limit").value);if(mode==="yolo-classify"){if(Number($("ai-limit").value)>0)argv.push("--limit",$("ai-limit").value);if(!$("dry").checked)argv.push("--apply");}if(mode==="karantina"&&!$("dry").checked){const ok=await openDialog({title:"Karantina duplicate",message:"Mode ini dapat MEMINDAH file. Dry-run sekarang OFF.",kind:"confirm",okText:"Jalankan"});if(ok===null)return;}showBusy($("ai-go"),true,"AI berjalan…");try{const r=await api("POST","/api/ai",{argv});$("ai-out").textContent=(r.output||r.error||JSON.stringify(r,null,2)).slice(-12000)+(r.report?`\n\nLaporan: ${r.report}`:"");toast(r.ok?"AI engine selesai.":r.error||"AI gagal",r.ok?"ok":"bad");await stats();await loadDocs();loadActivity();}catch(e){toast("AI engine gagal: "+e.message,"bad");}finally{showBusy($("ai-go"),false);}};
 
+async function loadYoloStatus(){
+  $("yolo-status").textContent="Memeriksa…";
+  try{
+    const r=await api("GET","/api/yolo/status");
+    if(!r.ok)throw new Error(r.error||"YOLO tidak tersedia");
+    const cls=Object.entries(r.classes||{}).sort((a,b)=>b[1]-a[1]);
+    $("yolo-status").textContent=(r.ready?`✓ Model siap (${filename(r.model)})`:`✗ ${r.ready_note||"model belum ada — latih dulu"}`)+(r.train?.running?` • TRAINING BERJALAN (pid ${r.train.pid})`:"");
+    $("yolo-classes").textContent=cls.length?`dataset_raw: ${r.class_total} gambar — `+cls.map(([k,v])=>`${k}:${v}`).join(" · "):"dataset_raw kosong — isi tiap kelas dengan foto sebelum training.";
+    if(r.train?.running)yoloPollStart();else yoloPollStop();
+    return r;
+  }catch(e){$("yolo-status").textContent="Gagal: "+e.message;return null;}
+}
+async function loadYoloLog(){
+  try{const r=await api("GET","/api/yolo/train/status");if(r.ok)$("yolo-log").textContent=(r.log_tail||[]).join("\n")||"—";return r;}catch(e){return null;}
+}
+let yoloPollTimer=null;
+function yoloPollStart(){if(yoloPollTimer)return;yoloPollTimer=setInterval(async()=>{const r=await loadYoloLog();const s=await api("GET","/api/yolo/status").catch(()=>null);if(s?.ok&&!s.train?.running){yoloPollStop();loadYoloStatus();toast("Training selesai/berhenti — cek log.","ok");}},4000);}
+function yoloPollStop(){if(yoloPollTimer){clearInterval(yoloPollTimer);yoloPollTimer=null;}}
+$("yolo-refresh").onclick=async()=>{await loadYoloStatus();await loadYoloLog();};
+$("yolo-start").onclick=async()=>{
+  const body={epochs:Number($("yolo-epochs").value)||150,batch:Number($("yolo-batch").value)||16,model_size:$("yolo-size").value,imgsz:Number($("yolo-imgsz").value)||288,patience:Number($("yolo-patience").value)||25};
+  const ok=await openDialog({title:"Mulai training YOLO",message:`Training berjalan BACKGROUND dan bisa jam-jaman.\n\nepoch=${body.epochs} batch=${body.batch} model=${body.model_size} imgsz=${body.imgsz} patience=${body.patience}\n\nLog: ai-yolo-project/results/train_app.log`,kind:"confirm",okText:"Mulai Latih"});
+  if(ok===null)return;showBusy($("yolo-start"),true,"Memulai…");
+  try{const r=await api("POST","/api/yolo/train/start",body);if(!r.ok)throw new Error(r.error||"gagal memulai");toast(`Training dimulai (pid ${r.pid}). Polling log tiap 4 detik.`,"ok");yoloPollStart();await loadYoloStatus();}catch(e){toast("Training gagal dimulai: "+e.message,"bad",6000);}finally{showBusy($("yolo-start"),false);}
+};
+$("yolo-stop").onclick=async()=>{
+  const ok=await openDialog({title:"Hentikan training?",message:"Proses python training dimatikan paksa. Bobot terakhir (last.pt) tetap tersimpan.",kind:"confirm",okText:"Stop"});
+  if(ok===null)return;try{const r=await api("POST","/api/yolo/train/stop",{});toast(r.stopped?"Training dihentikan.":(r.note||"Tidak ada training berjalan."),"ok");yoloPollStop();await loadYoloStatus();await loadYoloLog();}catch(e){toast("Gagal stop: "+e.message,"bad");}
+};
 async function loadJobs(){try{const r=await api("GET","/api/jobs/list?limit=50");const jobs=r.jobs||[];$("job-list").innerHTML=jobs.length?jobs.map(j=>`<div class="job-item"><span class="tag">${esc(j.status)}</span><div class="grow2"><b>#${j.id} · ${esc(j.kind)}</b><small>${esc(j.payload||"")}</small></div><button class="btn ghost sm" data-j="pause" data-id="${j.id}">⏸</button><button class="btn ghost sm" data-j="resume" data-id="${j.id}">▶</button><button class="btn ghost sm" data-j="cancel" data-id="${j.id}">✕</button></div>`).join(""):'<div class="empty-state">Tidak ada job.</div>';$("job-list").querySelectorAll("[data-j]").forEach(b=>b.onclick=async()=>{const r=await api("POST","/api/jobs/"+b.dataset.j,{id:Number(b.dataset.id)});toast(r.ok?`Job ${b.dataset.j} selesai.`:r.error||"Gagal",r.ok?"ok":"bad");await loadJobs();await stats();});}catch(e){$("job-list").innerHTML=`<div class="empty-state">Gagal: ${esc(e.message)}</div>`;}}
 $("job-add").onclick=async()=>{const payload=$("job-payload").value.trim();if(!payload)return toast("Isi payload JSON atau path job.","warn");try{const r=await api("POST","/api/jobs/enqueue",{kind:$("job-kind").value.trim(),payload});$("job-out").textContent=JSON.stringify(r,null,2);toast(r.ok?`Job #${r.id} ditambahkan.`:r.error||"Gagal",r.ok?"ok":"bad");await loadJobs();await stats();}catch(e){toast("Tambah job gagal: "+e.message,"bad");}};
 $("job-claim").onclick=async()=>{try{const r=await api("POST","/api/jobs/claim",{});$("job-out").textContent=JSON.stringify(r,null,2);toast(r.ok?`Job #${r.id} diambil.`:"Tidak ada job yang bisa diambil.",r.ok?"ok":"warn");await loadJobs();}catch(e){toast(e.message,"bad");}};
