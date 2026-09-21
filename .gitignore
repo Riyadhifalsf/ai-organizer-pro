@@ -1,0 +1,67 @@
+# ===== build outputs (regenerable) =====
+src-tauri/target/
+src-tauri/gen/
+build/
+CMakeFiles/
+*.ninja
+.ninja_deps
+.ninja_log
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+*.obj
+*.lib
+*.pdb
+*.ilk
+*.exp
+
+# ===== binary raksasa (di luar limit GitHub / install manual) =====
+# ffmpeg+ffprobe 211MB per file -> taruh manual di engine-py/app/ffmpeg/bin/
+engine-py/app/ffmpeg/bin/
+*.exe
+
+# ===== database & log lokal (data user) =====
+*.db
+*.db-wal
+*.db-shm
+*.log
+data/
+db.json
+activity.log
+desktop.ini
+
+# ===== output user (jangan commit; path di-anchor agar laporan YOLO tetap ikut) =====
+/results/
+/engine-py/results/
+ai-yolo-project/results/sorted/
+ai-yolo-project/results/predictions/
+ai-yolo-project/results/scan/
+ai-yolo-project/results/errors/
+
+# ===== YOLO: data & artefak training (berat) =====
+ai-yolo-project/dataset/
+ai-yolo-project/dataset_raw/
+ai-yolo-project/errors/
+ai-yolo-project/runs/
+# KECUALI bobot aktif (dipakai yolo_bridge default MODEL=train15)
+!ai-yolo-project/runs/classify/train15/weights/best.pt
+
+# ===== python / node =====
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+node_modules/
+.pytest_cache/
+
+# ===== third-party embedded git repos (ambil upstream saat build) =====
+third_party/googletest/
+third_party/spdlog/
+
+# ===== scratch & arsip lokal =====
+_archive/
+Python/scan_report.txt
+.vs/
+.vscode/
+*.zip

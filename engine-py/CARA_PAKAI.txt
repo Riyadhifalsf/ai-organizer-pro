@@ -1,0 +1,120 @@
+ai_organizer — AI agent kecil (lokal, tanpa remote, tanpa internet)
+================================================================
+LAUNCHER (organizer.py / organizer-cli.exe) — hanya 4 perintah:
+  install   pasang bila BELUM: lib + menu Explorer + startup (+penanda)
+  hapus     lepas bila SUDAH: menu + startup + uninstall paket pip
+            (pillow, watchdog). File results/ TIDAK dihapus.
+  cli ...   teruskan ke engine, mis: cli scan D:\foto --dry-run
+  gui       buka GUI modern (atau double-click ai_organizer-gui.exe)
+
+File:
+  organizer-cli.exe   launcher+engine teks (tanpa Python)
+  ai_organizer-gui.exe  GUI modern 4 tab (double-click)
+  uninstall.exe       = hapus (double-click)
+  core/engine.py      seluruh engine (launcher hanya teruskan perintah)
+  app_gui.py          GUI (panggil engine in-process, tanpa subprocess)
+  docai.py llm.py core/ ai/ integrations/ scripts/ config/
+
+Syarat ffmpeg (hanya untuk VIDEO): letakkan folder ffmpeg-9.0.1/bin
+di sebelah aplikasi. Tanpa itu, mode video-broken nonaktif otomatis.
+
+STRUKTUR OUTPUT (<out> default = folder ai_organizer ini):
+  results/duplicate/       duplikat yang dipindah (selalu PINDAH, sisakan 1)
+  results/broken/light|heavy/  rusak ringan/parah (copy atau pindah)
+  results/dokumen/<kategori>/  hasil tata Dokumen AI
+  results/reports/         csv/zip laporan + cache + feedback + behavior db
+  (folder lama duplikat/ laporan/ tidak dipakai lagi, tidak dihapus;
+   cache lama otomatis dimigrasi sekali ke results/reports/)
+Pilih default atau folder sendiri: GUI (checkbox) / CLI (--out DIR).
+
+MODE CLI:
+  scan           cari duplikat saja, aman.
+  karantina      cari + PINDAH duplikat ke duplicate/.
+    --mode exact   100% identik SHA256. Cepat, tanpa salah tuduh.
+    --mode visual  exact + mirip-visual dHash (thumbnail video/foto).
+                   Lebih lambat, bisa false positive. --visual-threshold 4/8/12.
+  video-broken   ffprobe: NORMAL/LIGHT_BROKEN/HEAVY_BROKEN.
+  image-broken   PIL: HEAVY = gagal dibuka; LIGHT = terbuka tapi cacat.
+    --broken-mode copy (original tetap, default) | move (pindah + verifikasi)
+  size           grup ukuran SAMA PERSIS + PINDAH (khusus folder broken).
+  analyze        AI dokumen: baca isi txt/docx/pdf-teks -> kategori, keyword,
+                 rekomendasi nama/folder, near-duplicate teks.
+    --limit N    batasi file (uji).  --apply [--apply-copy] untuk menata.
+  organize-videos  rapikan video by metadata ExifTool -> Cameras/<Tipe>/,
+                 04_Screen-Recordings/, 00_Uncategorized (lihat kartu GUI).
+  organize-images  rapikan foto by metadata EXIF -> Cameras/<Tipe>/, 00_/03_/99_.
+    --apply mengeksekusi (default dry-run RENCANA). --apply-copy: original tetap.
+    --rename-dated: nama YYYY-MM-DD_HHMMSS.ext. --content 'pola=>Tujuan'.
+    --file/--file-list: seleksi file. --dest-root: tujuan lain (default in-place).
+    --junk-to-delete: non-media -> 99_To-Delete. --prune-empty: hapus folder kosong.
+    --limit N batasi. --exiftool PATH bila tidak di PATH.
+Contoh:
+  organizer-cli.exe scan D:\foto
+  organizer-cli.exe karantina D:\foto --mode visual --dry-run
+  organizer-cli.exe image-broken D:\foto --broken-mode copy
+  organizer-cli.exe analyze D:\dokumen --limit 50
+  organizer-cli.exe analyze D:\dokumen --apply --apply-copy
+  organizer-cli.exe organize-videos D:\results\Videos --limit 20
+  organizer-cli.exe organize-videos D:\results\Videos --apply
+  organizer-cli.exe organize-images D:\results\Images --limit 20
+  organizer-cli.exe organize-images D:\results\Images --apply --prune-empty
+
+DOKUMEN AI (docai.py, murni stdlib — machine learning klasik offline):
+  TF-IDF + centroid supervised, 7 kategori (Keuangan Akademik Kantor Hukum
+  Kesehatan Teknologi Pribadi). Koreksi via GUI (pilih baris -> Belajar!),
+  tersimpan di laporan/doc_feedback.json dan dipakai di analisis berikut.
+  Confidence < 0.3 -> nama file TIDAK disarankan ganti (pakai nama asli).
+  PDF hasil scan (gambar) -> status no-text, masuk Tak-terbaca.
+LLM LOKAL (Qwen qwen2.5:0.5b, 397MB, offline, ~5 dtk/file):
+  Sekali saja: install Ollama (winget install Ollama.Ollama),
+  set OLLAMA_MODELS=D:\ai_organizer\llm\models, lalu:
+    ollama pull qwen2.5:0.5b
+  Pakai: organizer-cli.exe analyze D:\dokumen --llm [--llm-max 20]
+  atau centang "LLM lokal Qwen" di tab Dokumen AI.
+  LLM memberi second-opinion kategori + ringkasan 1 kalimat untuk file
+  yang membingungkan classifier (confidence < 0.5). Server Ollama
+  dinyalakan otomatis bila belum jalan.
+
+KEAMANAN: butuh Run as administrator untuk PINDAH di folder protektif
+(WinError 5). Selalu coba --dry-run dulu. Satu proses per output
+(dikunci .ai_organizer.lock).
+
+ARSITEKTUR (source tersebar, bukan satu file):
+  organizer.py        CLI + engine duplikat/broken/analyze
+  app_gui.py          GUI modern 4 tab (panggil engine in-process)
+  docai.py            ML dokumen (TF-IDF + centroid + SimHash)
+  llm.py              klien LLM lokal (Ollama + Qwen)
+  core/bootstrap.py   auto-install library saat awal (pillow, watchdog)
+  core/settings.py    pengaturan JSON (reason_level, watch_folders, ...)
+  ai/reason.py        reasoning L1/L2/L3 + cache (atur kekuatannya)
+  ai/behavior.py      belajar perilaku user (SQLite lokal) + rekomendasi
+  integrations/explorer.py  context-menu + startup + toast Windows
+  scripts/daemon.py   background: pantau folder + poll Explorer aktif
+  scripts/uninstall.py  -> uninstall.exe
+  config/settings.json  pengaturanmu (dibuat otomatis)
+
+DAEMON OTOMATIS (startup):
+  dist\organizer-cli.exe --install   (sekali: menu + startup + lib)
+  Daemon hidup tiap login: pantau watch_folders, deteksi folder yang kamu
+  buka di Explorer, kirim rekomendasi (toast). Auto-aksi HANYA untuk folder
+  yang kamu setujui (tawaran muncul setelah 3x karantina manual).
+  Kelola: --watch DIR (tambah pantauan), --recommend (lihat rekomendasi),
+  GUI tab Pengaturan (level reasoning, install/uninstall, unduhan).
+  Berhenti total: dist\uninstall.exe (double-click).
+
+REASONING (atur di GUI Pengaturan / config/settings.json):
+  L1 cepat: nama/ekstensi/ukuran/umur (~1ms/file).
+  L2 standar: + isi dokumen, header gambar (disarankan harian).
+  L3 mendalam: + LLM Qwen untuk yang ambigu (~5 dtk/file, --llm-max).
+  Perintah: organizer-cli.exe --reason PATH / --recommend
+
+NATIVE (C#, .NET Framework bawaan Windows — tanpa download):
+  native/AiShExt.dll   shell extension COM: klik kanan folder/background
+                       -> submenu "ai_organizer" DINAMIS (Scan, Analisis AI,
+                       GUI + top-3 rekomendasi dari results/reports/recommend.json).
+                       Daftar HKCU (tanpa admin). Dibangun otomatis saat install.
+  native/AiHelper.exe  toast balon + deteksi folder Explorer aktif
+                       (tanpa pywin32/BurntToast).
+  Rust/C++/Ruby TIDAK dipakai: tidak ada toolchain di mesin ini dan .NET
+  Framework sudah cukup untuk COM+helper (jujur: menambah bahasa tidak
+  menambah kuat bila runtime-nya tidak ada).

@@ -1,0 +1,33 @@
+LAPORAN KEMAMPUAN MODEL
+Tanggal: 2026-09-15 03:04
+Model: D:\development\ai-yolo-project\runs\classify\train15\weights\best.pt
+Data uji: D:\development\ai-yolo-project\dataset\val (1141 gambar)
+
+AKURASI KESELURUHAN: 63.01% (719/1141)
+
+Per kelas:
+  - anime: 100.00% (28/28)
+  - broken-image: 50.00% (2/4)
+  - camera: 1.89% (3/159)
+  - cewe: 17.86% (10/56)
+  - document: 96.19% (101/105)
+  - game: 25.53% (12/47)
+  - icons: 32.65% (32/98)
+  - mahwa: 11.76% (2/17)
+  - screenshots: 84.37% (529/627)
+
+Salah tebak tersering (aktual -> prediksi):
+  - camera -> Camera: 151x
+  - screenshots -> Camera: 44x
+  - icons -> screenshots: 43x
+  - game -> screenshots: 30x
+  - cewe -> Camera: 27x
+  - screenshots -> document: 26x
+  - cewe -> screenshots: 18x
+  - mahwa -> screenshots: 12x
+  - icons -> anime: 9x
+  - screenshots -> anime: 9x
+
+CATATAN: data ini = validation set (pernah dipakai pilih model),
+jadi angka sedikit optimistis. Untuk angka final, evaluasi di test set
+hasil split_dataset baru (python train.py).

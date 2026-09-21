@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AIOrganizerPro — Local File Intelligence</title>
+<link rel="icon" type="image/png" href="icon.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand"><span class="logo">▶</span><span>Video Organizer</span></div>
+    <label class="finder">⌕ <input aria-label="Cari" placeholder="Cari video, folder, atau tag..."></label>
+    <nav class="tabs side-nav" id="tabs">
+      <p class="nav-label">NAVIGASI</p>
+      <button data-v="dash" class="on">⌂ <span>Beranda</span></button>
+      <button data-v="scan">▣ <span>Semua Video</span><em>4.938</em></button>
+      <button data-v="dup">◈ <span>Duplikat</span><em>12</em></button>
+      <button data-v="doc">▤ <span>Dokumen AI</span></button>
+      <button data-v="db">◉ <span>Database</span></button>
+      <button data-v="act">◷ <span>Aktivitas</span></button>
+      <p class="nav-label folder-label">FOLDER</p>
+      <div class="folder-tree">
+        <div>⌄ <b>▰</b> 2025 <small>1.768</small></div>
+        <div class="indent">⌄ <b>▰</b> 05 - Mei <small>246</small></div>
+        <div class="indent selected">› <b>▰</b> 05-01_Event <small>48</small></div>
+        <div class="indent">› <b>▰</b> 05-02_Liburan <small>62</small></div>
+        <div class="indent">› <b>▰</b> 05-03_Keluarga <small>71</small></div>
+        <div class="indent">› <b>▰</b> 05-04_Makanan <small>39</small></div>
+        <div>› <b>▰</b> 2026 <small>934</small></div>
+      </div>
+      <p class="nav-label folder-label">JENIS FILE</p>
+      <div class="folder-tree compact"><div>› <b>▰</b> MP4 <small>3.102</small></div><div>› <b>▰</b> MOV <small>982</small></div><div>› <b>▰</b> AVI <small>210</small></div></div>
+    </nav>
+  </aside>
+  <div class="workspace">
+  <header class="top">
+    <div class="crumb-home">⌂ <span>Beranda</span><span id="t-sub" hidden>duplikat • broken • dokumen AI • database terpadu</span></div>
+    <div class="file-tab">▶ &nbsp; VID_20250501_142530.mp4 <span>×</span></div>
+    <div class="sp"></div>
+    <label class="dry"><input type="checkbox" id="dry" checked> <span id="t-dry">Dry-run</span></label>
+    <button id="lang" class="ghost">EN</button>
+    <span id="health" class="pill">…</span>
+  </header>
+<main>
+  <section id="v-dash" class="view on">
+    <div class="breadcrumb">Video Organizer <i>›</i> 2025 <i>›</i> 05 - Mei <i>›</i> 05-01_Event <i>›</i> <strong>VID_20250501_142530.mp4</strong></div>
+    <div class="detail-layout">
+      <div class="video-detail">
+        <div class="video-heading"><span class="file-icon">▶</span><h1 id="video-title">VID_20250501_142530.mp4</h1><button class="link-btn" data-video-action="open">Buka File ↗</button></div>
+        <div class="video-source"><input id="video-path" placeholder="Tempel path video lokal, contoh D:\\Videos\\video.mp4"><button class="btn acc" data-video-action="load">Muat Video</button></div>
+        <div class="meta-pills"><span class="blue">MP4</span><span class="purple">Event</span><span class="green">2025-05-01</span><span class="good">✓ Good</span><span>▣ 5.2 MB</span><span>◷ 00:00:32</span></div>
+        <div class="video-preview"><video id="video-player" controls hidden></video><div class="placeholder-scene"><div class="sky"></div><div class="mountain one"></div><div class="mountain two"></div><div class="water"></div><div class="playerbar"><b>▶</b><span>00:00 / 00:32</span><div></div><b>◖</b><b>⛶</b></div></div></div>
+        <div class="info-grid">
+          <article class="info-card"><h3>⛶ &nbsp; Detail Video <span>⌄</span></h3><dl><dt>Nama File</dt><dd id="video-name">VID_20250501_142530.mp4</dd><dt>Ukuran</dt><dd id="video-size">5.2 MB</dd><dt>Durasi</dt><dd id="video-duration">00:00:32</dd><dt>Resolusi</dt><dd id="video-resolution">1920 × 1080 (FHD)</dd><dt>Codec Video</dt><dd id="video-codec">H.264 (High)</dd><dt>Codec Audio</dt><dd id="audio-codec">AAC</dd><dt>Frame Rate</dt><dd id="video-fps">30 fps</dd><dt>Rasio Aspek</dt><dd id="video-aspect">16:9</dd><dt>Tanggal Diubah</dt><dd id="video-modified">2025-05-01 14:25:30</dd></dl></article>
+          <article class="info-card analysis"><h3>◎ &nbsp; Analisis File</h3><div class="normal" id="analysis-status">✓ <b>File siap dianalisis</b></div><ul id="analysis-list"><li>Muat video untuk membaca metadata</li><li>Pemutaran tersedia dari aplikasi default</li><li>Tag dan catatan disimpan lokal</li></ul><hr><b>Thumbnail</b><div class="mini-thumb"></div></article>
+        </div>
+        <details class="answer"><summary>› &nbsp; Tampilkan Jawaban</summary><p id="recs" class="mut">Memuat rekomendasi…</p></details>
+        <details class="answer"><summary>› &nbsp; Tampilkan Pembahasan</summary><p class="mut">Informasi analisis dan indeks video lokal.</p></details>
+        <article class="tag-card"><b>◇ &nbsp; Tag & Kategori</b><button class="link-btn" data-video-action="tags">✎ Edit Tag</button><div class="meta-pills" id="tag-list"><span class="purple">Event</span><span>Pemandangan</span><span>Danau</span><span>2025</span><span>05-01</span></div></article>
+        <article class="tag-card"><b>▤ &nbsp; Catatan</b><button class="link-btn" data-video-action="note">✎ Edit Catatan</button><p id="note-text">Video ini diambil saat perjalanan ke danau pada tanggal 1 Mei 2025.<br>Kondisi cuaca cerah dan pemandangannya bagus.</p></article>
+        <div class="cards utility-cards" id="stat-cards"></div>
+      </div>
+      <aside class="right-panel">
+        <article class="right-card"><h3>◇ &nbsp; Tools & Aksi</h3><button class="primary-action" data-video-action="open">◉ &nbsp; Buka di Player</button><button data-video-action="folder">▱ &nbsp; Buka Lokasi File</button><button data-video-action="rename">✎ &nbsp; Rename</button><button data-video-action="move">▣ &nbsp; Pindahkan</button><button data-video-action="delete">▥ &nbsp; Pindahkan ke 99_To-Delete</button></article>
+        <article class="right-card checks"><h3>☼ &nbsp; Quick Analysis</h3><p>✓ <b>Duplikat</b><span id="check-duplicate">Perlu scan</span></p><p>✓ <b>File Rusak</b><span id="check-health">Belum dicek</span></p><p>✓ <b>Metadata</b><span id="check-metadata">Belum dimuat</span></p><p>✓ <b>Ukuran File</b><span id="check-size">—</span></p><p>✓ <b>Tipe File</b><span id="check-type">—</span></p></article>
+        <article class="right-card relation"><h3>◉ &nbsp; Relasi</h3><a>Lihat semua video di folder ini (48)</a><a>Lihat video dengan tag yang sama (3)</a><a>Lihat video dari tanggal ini (12)</a><a>Lihat video duplikat (0)</a></article>
+        <article class="right-card summary"><h3>▧ &nbsp; Ringkasan</h3><p>▣ <span>Total di Folder Ini<br><b>48 video</b></span></p><p>▦ <span>Total Ukuran<br><b>2.4 GB</b></span></p><p>◷ <span>Durasi Total<br><b>02:36:17</b></span></p></article>
+      </aside>
+    </div>
+    <div class="grid2 hidden-dashboard">
+      <div class="card"><h3>💡 Rekomendasi <button class="help-btn" data-h="rec" title="Bantuan">?</button></h3><div class="help-pop" hidden></div><div class="mut">Rekomendasi tersedia pada panel detail.</div></div>
+      <div class="card"><h3>⚙️ Jobs <button class="help-btn" data-h="jobs" title="Bantuan">?</button></h3><div class="help-pop" hidden></div>
+        <div class="row"><input id="job-kind" value="scan" class="in"><input id="job-payload" placeholder='{"root":"D:\Data"}' class="in grow"><button id="job-add" class="btn">+ Job</button><button id="job-claim" class="btn ghost">Claim</button><button id="job-reload" class="btn ghost">Daftar</button></div>
+        <div id="job-out" class="mut">…</div>
+        <div id="job-list" class="mut" style="margin-top:8px">—</div>
+      </div>
+    </div>
+  </section>
+  <section id="v-scan" class="view">
+    <div class="card"><h3>⚡ Scan cepat (core C++) <button class="help-btn" data-h="scan" title="Bantuan">?</button></h3><div class="help-pop" hidden></div>
+      <div class="row"><input id="scan-folder" class="in grow" placeholder="D:\Data"><button id="scan-go" class="btn acc">▶ Mulai</button></div>
+      <p class="mut">Traversal + index SQLite (skip file tak berubah). Aman: hanya membaca.</p>
+      <pre id="scan-out" class="log">—</pre>
+    </div>
+    <div class="card"><h3>🤖 AI engine (broken / size / analyze / yolo) <button class="help-btn" data-h="ai" title="Bantuan">?</button></h3><div class="help-pop" hidden></div>
+      <div class="row">
+        <select id="ai-mode" class="in">
+          <option value="video-broken">video-broken (ffprobe)</option>
+          <option value="image-broken">image-broken (PIL)</option>
+          <option value="size">size (grup ukuran)</option>
+          <option value="analyze">analyze (dokumen AI)</option>
+          <option value="scan">scan (duplikat exact)</option>
+          <option value="karantina">karantina (pindah duplikat)</option>
+          <option value="yolo-classify">yolo-classify (gambar -&gt; kelas YOLO)</option>
+        </select>
+        <input id="ai-folder" class="in grow" placeholder="D:\Data">
+        <input id="ai-limit" class="in sm" value="0" title="limit (analyze)">
+        <button id="ai-go" class="btn acc">▶ Jalan</button>
+      </div>
+      <pre id="ai-out" class="log">—</pre>
+    </div>
+    <div class="card"><h3>🎬 Organisasi media (metadata ExifTool) <button class="help-btn" data-h="orgv" title="Bantuan">?</button></h3><div class="help-pop" hidden></div>
+      <div class="row">
+        <select id="org-kind" class="in"><option value="videos">🎥 Video</option><option value="images">📷 Foto</option></select>
+        <input id="org-folder" class="in grow" placeholder="D:\results\Videos">
+        <input id="org-dest" class="in grow" placeholder="Tujuan (kosong = path yang sama)">
+      </div>
+      <div class="row" style="margin-top:6px">
+        <label class="mut"><input type="checkbox" id="org-apply"> Terapkan (pindah)</label>
+        <label class="mut"><input type="checkbox" id="org-copy"> Copy saja</label>
+        <label class="mut"><input type="checkbox" id="org-dated"> Nama tanggal</label>
+        <label class="mut"><input type="checkbox" id="org-junk"> Junk → 99_To-Delete</label>
+        <label class="mut"><input type="checkbox" id="org-prune"> Hapus folder kosong</label>
+        <input id="org-limit" class="in sm" value="0" title="limit">
+        <button id="org-files" class="btn">☰ Pilih file…</button>
+        <button id="org-go" class="btn acc">▶ Rencana</button>
+      </div>
+      <div id="org-sel" hidden>
+        <div class="row" style="margin:6px 0"><input id="org-q" class="in grow" placeholder="saring nama file…"><button id="org-all" class="btn ghost">Semua</button><button id="org-none" class="btn ghost">Nol</button><span class="mut" id="org-count"></span></div>
+        <div id="org-list" class="picklist mut">—</div>
+      </div>
+      <div class="row" style="margin-top:6px"><input id="org-content" class="in grow" placeholder="aturan Content manual: *liburan*=>YouTube/Raw (satu/baris, ; pemisah)"><button id="org-dl" class="btn ghost" disabled title="Unduh plan CSV terakhir">⬇ Plan CSV</button></div>
+      <details class="tree"><summary>📁 Struktur folder tujuan</summary>
+<pre>Videos/  (Foto: Images/ — sama)
+├── 00_Uncategorized/&lt;YYYY-MM&gt;/  (tanpa metadata kamera, dikelompokkan by tanggal)
+├── 03_Content/  (manual: YouTube/Raw|Edited|Export, TikTok, Instagram, Shorts)
+├── 04_Screen-Recordings/  (Coding, Gaming, Tutorials, Other)
+├── Cameras/&lt;TIPE-UPPER&gt;/  (IPHONE_7_PLUS, REALME_6, SONY_HDR_XR150E, … — tanpa subfolder; alias RMX2001→REALME_6, 22081283G→REDMI_PAD)
+└── 99_To-Delete/  (manual: --to-delete-list / Junk)</pre>
+      </details>
+      <pre id="org-out" class="log">—</pre>
+    </div>
+  </section>
+  <section id="v-dup" class="view">
+    <div class="card"><h3>🗂️ Duplikat exact (size → quick → partial → full SHA-256) <button class="help-btn" data-h="dup" title="Bantuan">?</button></h3><div class="help-pop" hidden></div>
+      <div class="row"><input id="dup-folder" class="in grow" placeholder="D:\Data"><input id="dup-min" class="in sm" value="1" title="min bytes"><button id="dup-go" class="btn acc">▶ Cari</button></div>
+      <div id="dup-list" class="mut">—</div>
+    </div>
+    <div class="card"><h3>📦 Proposal organizer <button class="help-btn" data-h="prop" title="Bantuan">?</button></h3><div class="help-pop" hidden></div>
+      <div class="row"><button id="prop-reload" class="btn">Muat proposal pending</button><span class="mut">Usulkan dari grup duplikat (tombol ◔), pratinjau, lalu setujui/tolak. Tak ada file pindah sebelum disetujui.</span></div>
+      <div id="prop-list" class="mut">—</div>
+    </div>
+  </section>
+  <section id="v-doc" class="view">
+    <div class="card"><h3>📄 Hasil Dokumen AI (doc_index terpadu) <button class="help-btn" data-h="doc" title="Bantuan">?</button></h3><div class="help-pop" hidden></div>
+      <div class="row"><button id="doc-reload" class="btn">Muat ulang</button><input id="doc-q" class="in grow" placeholder="cari kategori / nama…"></div>
+      <table class="tbl"><thead><tr><th>Kategori</th><th>Conf</th><th>Saran nama</th><th>Path</th></tr></thead><tbody id="doc-rows"></tbody></table>
+    </div>
+  </section>
+  <section id="v-db" class="view">
+    <div class="card"><h3>🔌 Status database <button class="help-btn" data-h="dbswitch" title="Bantuan">?</button></h3><div class="help-pop" hidden></div>
+      <div class="row">
+        <label class="switch"><input type="checkbox" id="db-toggle" checked><span class="sl"></span></label>
+        <b id="db-state-label">ON</b>
+        <span class="mut" id="db-path-label">—</span>
+      </div>
+      <div class="row" style="margin-top:8px"><button id="doctor-go" class="btn">🩺 Cek kesehatan (doctor)</button><span class="mut">integritas, skema, ruang disk, izin tulis, ffprobe.</span></div>
+      <div id="doctor-out" class="mut" style="margin-top:8px">—</div>
+    </div>
+    <div class="card"><h3>🗄️ Database terpadu <button class="help-btn" data-h="db" title="Bantuan">?</button></h3><div class="help-pop" hidden></div>
+      <div class="row"><button id="db-reload" class="btn">Muat ulang stats</button></div>
+      <pre id="db-out" class="log">—</pre>
+      <p class="mut">Satu file SQLite (WAL): index file + hash cache + grup duplikat + moves + jobs + behavior + doc_index + proposals + audit. Lokasi tampil di footer.</p>
+    </div>
+    <div class="card"><h3>🧾 Jejak audit <button class="help-btn" data-h="audit" title="Bantuan">?</button></h3><div class="help-pop" hidden></div>
+      <div class="row"><button id="audit-reload" class="btn">Muat ulang</button><input id="audit-q" class="in" placeholder="filter aksi (scan/move/…)"></div>
+      <table class="tbl"><thead><tr><th>#</th><th>Aktor</th><th>Aksi</th><th>Hasil</th><th>Detail</th></tr></thead><tbody id="audit-rows"><tr><td colspan="5" class="mut">—</td></tr></tbody></table>
+    </div>
+  </section>
+  <section id="v-act" class="view">
+    <div class="card"><h3>📋 Log aktivitas <button class="help-btn" data-h="act" title="Bantuan">?</button></h3><div class="help-pop" hidden></div>
+      <div class="row"><button id="act-reload" class="btn">Muat ulang</button><button id="act-export" class="btn ghost">⬇ Unduh log</button><button id="act-clear" class="btn ghost">Hapus log</button><span class="mut">Tercatat otomatis setiap aksi (tersimpan di data/activity.log).</span></div>
+      <table class="tbl"><thead><tr><th>Waktu</th><th>Aksi</th><th>Detail</th></tr></thead><tbody id="act-rows"><tr><td colspan="3" class="mut">—</td></tr></tbody></table>
+    </div>
+  </section>
+</main>
+<footer class="foot mut">Lokal 100% • tidak pernah menghapus • move selalu terverifikasi + tercatat rollback • <span id="db-path"></span></footer>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

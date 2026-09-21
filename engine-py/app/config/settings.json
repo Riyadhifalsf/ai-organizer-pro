@@ -1,0 +1,13 @@
+{
+  "reason_level": 2,
+  "llm_max": 20,
+  "cache_ttl_h": 24,
+  "watch_folders": [
+    "D:\\results\\Unknown"
+  ],
+  "startup": true,
+  "notify": true,
+  "broken_mode": "copy",
+  "dup_mode": "exact",
+  "out": ""
+}
