@@ -1,42 +1,33 @@
-# AIOrganizerPro 0.3.0 — SATU folder gabungan
-
-Penggabungan **ai_organizer** (Python: dokumen AI, LLM lokal, broken-video,
-daemon, Explorer) + **AIOrganizer** (C++: scanner 1700 f/s, hash bertahap,
-SQLite WAL) + master documentation (4805 baris) menjadi satu aplikasi.
-Sumber lama yang redundan sudah dihapus; `ai_organizer/results/` (data user)
-sengaja dipertahankan.
-
-## Struktur final
+# AIOrganizerPro 0.4.0 — aplikasi desktop Qt6/C++
 
 ```
 ai-organizer-pro\
-  AIOrganizerPro.exe  APLIKASI Windows native (Tauri+Rust) — klik 2x langsung jalan
-  AIOrganizerPro-web.exe  launcher mode website (server + browser, tanpa console)
-  aiorganizer.exe     core C++ (scan/duplikat/jobs/proposal/audit/doctor)
-  organizer-cli.exe   engine Python beku (scan/karantina/analyze LLM)
-  legacy\             3 exe lama sebagai cadangan
-  PRO.cmd             dispatcher: gui|stats|scan|dup|doctor|migrate|db|build
-  scripts/            run-server, db-stats/query/shell, scan, duplicates,
-                      build-core, migrate, install-startup, doctor (.ps1)
-  src/                core C++ (scanner, hashing, database v4, duplicate)
-  engine-py/          engine Python (AI, LLM, broken, daemon) + sidecar.py
-  gui/                GUI web modern — HTML/CSS/JS murni
-  server/             bridge REST Node stdlib (port 8471)
-  src-tauri/          backend Rust/Tauri v2 + icons (dari assets\icon)
-  assets/             icon.ico / icon.png resmi
-  docs/               MASTER doc, ARCHITECTURE, BUILD, CARA_PAKAI, AGENTS
-  db/                 schema_v4.sql — SATU database terpadu
+  qt\build\AIOrganizerPro.exe  APLIKASI desktop Qt6 — klik 2x langsung jalan
+  qt/                 sumber GUI Qt (MainWindow, tab, player, viewer, gallery)
+  src/                core C++ (scanner, hashing, database v4, duplicate, jobs)
+  aiorganizer.exe     core C++ jadi (dipakai Qt via QProcess --json)
+  engine-py/          HANYA AI: sidecar.py (YOLO classify/training, analyze,
+                      organize, broken) — dipanggil Qt, bukan website
+  ai-yolo-project/    training + bobot YOLO (jangan diubah strukturnya)
+  PRO.cmd             dispatcher: gui|stats|scan|dup|doctor|migrate|db|build|build-qt
+  scripts/            db-stats/query/shell, scan, duplicates, build-core,
+                      build-qt, migrate, install-startup, doctor (.ps1)
   data/               aiorganizer.db + db.json (saklar) + activity.log
-  ai_organizer/results/  DATA USER lama (120GB, jangan hapus sembarangan)
-  tools/              migrate_unified.py + launcher\ (sumber AIOrganizerPro-web.exe)
-  tests/              GoogleTest (20 test hijau)
+  db/                 schema_v4.sql — SATU database terpadu
+  docs/               dokumentasi (MASTER, ARCHITECTURE, BUILD, YOLO, QT)
+  tools/              migrate_unified.py
+  tests/              GoogleTest
+  _archive/           web stack lama (gui/server/src-tauri) + cadangan lain
 ```
+
+Butuh Qt 6.8.x MSVC2022 di `D:\Qt\6.8.3\msvc2022_64` (atau set `QT_PREFIX`).
+ffmpeg/ffprobe taruh manual di `engine-py/app/ffmpeg/bin/`.
 
 ## Pakai
 
 ```powershell
-.\AIOrganizerPro.exe      # APLIKASI native — klik 2x
-PRO.cmd gui                 # buka GUI modern (mode website)
+PRO.cmd gui                 # buka aplikasi desktop Qt
+PRO.cmd build-qt            # rebuild aplikasi Qt
 PRO.cmd doctor              # cek kesehatan (node/python/db/exe/ffmpeg/icon)
 PRO.cmd scan D:\Data        # scan cepat (baca saja)
 PRO.cmd dup D:\Data         # cari duplikat exact

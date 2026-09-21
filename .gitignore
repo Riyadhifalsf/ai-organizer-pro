@@ -59,6 +59,9 @@ node_modules/
 third_party/googletest/
 third_party/spdlog/
 
+# ===== Qt GUI build (windeployqt output, regenerable) =====
+qt/build/
+
 # ===== scratch & arsip lokal =====
 _archive/
 Python/scan_report.txt
