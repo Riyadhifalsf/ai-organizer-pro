@@ -3,7 +3,7 @@ REM PRO.cmd — dispatcher cepat: PRO <perintah> [args]
 REM   gui | stats | scan FOLDER | dup FOLDER | doctor | migrate | db "SQL" | build | build-qt
 set PRO=%~dp0
 if "%1"=="" goto help
-if "%1"=="gui" start "" "%PRO%qt\build\AIOrganizerPro.exe" & goto :eof
+if "%1"=="gui" start "" "%PRO%AIOrganizerPro.exe" & goto :eof
 if "%1"=="stats" powershell -NoProfile -ExecutionPolicy Bypass -File "%PRO%scripts\db-stats.ps1" & goto :eof
 if "%1"=="scan" powershell -NoProfile -ExecutionPolicy Bypass -File "%PRO%scripts\scan.ps1" -Folder "%2" & goto :eof
 if "%1"=="dup" powershell -NoProfile -ExecutionPolicy Bypass -File "%PRO%scripts\duplicates.ps1" -Folder "%2" & goto :eof

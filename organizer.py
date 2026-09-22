@@ -52,7 +52,7 @@ def main(argv=None):
 
 
 def run_gui():
-    """Buka aplikasi desktop Qt (qt/build/AIOrganizerPro.exe)."""
+    """Buka aplikasi desktop Qt (AIOrganizerPro.exe di root)."""
     cur = BASE  # BASE = folder organizer.py -> naik sampai PRO.cmd ketemu
     pro = BASE
     for _ in range(6):
@@ -63,7 +63,7 @@ def run_gui():
         if parent == cur:
             break
         cur = parent
-    exe = os.path.join(pro, "qt", "build", "AIOrganizerPro.exe")
+    exe = os.path.join(pro, "AIOrganizerPro.exe")
     if os.path.isfile(exe):
         if os.name == "nt":
             os.startfile(exe)

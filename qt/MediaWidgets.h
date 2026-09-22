@@ -12,6 +12,16 @@
 
 class Backend;
 
+// Prototype empty state untuk area video: dilukis langsung dengan QPainter
+// supaya tampilannya tetap native C++ tanpa aset bitmap tambahan.
+class EmptyVideoPlaceholder : public QLabel {
+ public:
+  explicit EmptyVideoPlaceholder(QWidget* parent = nullptr);
+
+ protected:
+  void paintEvent(QPaintEvent* event) override;
+};
+
 class VideoPlayer : public QWidget {
   Q_OBJECT
  public:
@@ -35,7 +45,7 @@ class VideoPlayer : public QWidget {
   QMediaPlayer* m_player;
   QVideoWidget* m_video;
   QAudioOutput* m_audio;
-  QLabel* m_fallback;
+  EmptyVideoPlaceholder* m_fallback;
   QLabel* m_info;
   QToolBar* m_bar;
   QString m_path;

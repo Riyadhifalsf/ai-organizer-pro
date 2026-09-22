@@ -11,13 +11,14 @@ cmake_install.cmake
 CTestTestfile.cmake
 *.obj
 *.lib
+*.dll
 *.pdb
 *.ilk
 *.exp
 
 # ===== binary raksasa (di luar limit GitHub / install manual) =====
-# ffmpeg+ffprobe 211MB per file -> taruh manual di third_party/ffmpeg/bin/
-third_party/ffmpeg/bin/
+# ffmpeg+ffprobe 211MB per file -> taruh manual di bin/ffmpeg/
+bin/ffmpeg/
 *.exe
 
 # ===== database & log lokal (data user) =====
@@ -60,6 +61,16 @@ third_party/spdlog/
 
 # ===== Qt GUI build (windeployqt output, regenerable) =====
 qt/build/
+# ===== runtime Qt ter-deploy di root (windeployqt, regenerable) =====
+*.dll
+platforms/
+multimedia/
+imageformats/
+iconengines/
+generic/
+networkinformation/
+tls/
+styles/
 
 # ===== scratch & arsip lokal =====
 _archive/

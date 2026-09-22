@@ -10,4 +10,8 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 cmd /c ('"' + $VCVARS + '" >nul && cmake --build "' + (Join-Path $PRO "qt\build") + '"')
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & (Join-Path $QT "bin\windeployqt.exe") --release --no-translations --no-system-d3d-compiler (Join-Path $PRO "qt\build\AIOrganizerPro.exe")
-Write-Host "Qt OK: qt\build\AIOrganizerPro.exe"
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+# Deploy ke root: exe paling depan + runtime di sebelahnya.
+Copy-Item (Join-Path $PRO "qt\build\AIOrganizerPro.exe") (Join-Path $PRO "AIOrganizerPro.exe") -Force
+& (Join-Path $QT "bin\windeployqt.exe") --release --no-translations --no-system-d3d-compiler (Join-Path $PRO "AIOrganizerPro.exe")
+Write-Host "Qt OK: AIOrganizerPro.exe (root)"

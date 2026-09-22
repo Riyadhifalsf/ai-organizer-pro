@@ -26,6 +26,10 @@ add_executable(AIOrganizerPro
 target_link_libraries(AIOrganizerPro PRIVATE
   Qt6::Widgets Qt6::Multimedia Qt6::MultimediaWidgets Qt6::Concurrent)
 
+# EXE + DLL deploy di ROOT proyek (paling depan, gampang dicari).
+set_target_properties(AIOrganizerPro PROPERTIES
+  RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/..")
+
 if(WIN32)
   # ON = console dev (lihat log); OFF = exe bersih tanpa console.
   option(QT_CONSOLE_DEV "Console dev" OFF)

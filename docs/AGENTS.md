@@ -1,4 +1,4 @@
-# AGENTS.md — Prompt Tugas untuk AI yang mengerjakan ai_organizer
+﻿# AGENTS.md â€” Prompt Tugas untuk AI yang mengerjakan ai_organizer
 
 > File ini DIBACA AI (asisten kode / LLM lokal) sebelum mengubah apa pun.
 > Manusia baca CARA_PAKAI.txt. AI baca file ini + CARA_PAKAI.txt.
@@ -7,7 +7,7 @@
 
 `ai_organizer` = AI agent kecil, **lokal 100%** (tanpa remote, tanpa internet wajib),
 untuk merapikan file Windows sehari-hari: duplikat, file rusak (video/gambar),
-dan dokumen (pahami isi → kategori → rekomendasi nama/folder). Target: kuat,
+dan dokumen (pahami isi â†’ kategori â†’ rekomendasi nama/folder). Target: kuat,
 ringan, aman (tidak pernah menghapus tanpa perintah eksplisit dan verifikasi).
 
 ## 2. Struktur yang WAJIB dijaga
@@ -33,7 +33,7 @@ D:\ai-organizer-pro\            <- APP ROOT (jangan pindah/rename)
     scripts\daemon.py            <- background (watchdog + poll Explorer)
     scripts\uninstall.py         <- uninstall.exe
     native\*.cs + bin\          <- AiShExt.dll (COM), AiHelper.exe (C#, csc)
-    ffmpeg\bin\                  <- ffmpeg.exe + ffprobe.exe (JANGAN hapus ffprobe!)
+    third_party/ffmpeg/      <- ffmpeg.exe + ffprobe.exe (JANGAN hapus ffprobe!)
     config\settings.json         <- pengaturan user (jangan timpa tanpa baca dulu)
     llm\models\                  <- model Ollama (boleh kosong di repo)
   results\                       <- OUTPUT (jangan taruh kode di sini!)
@@ -42,12 +42,12 @@ D:\ai-organizer-pro\            <- APP ROOT (jangan pindah/rename)
 
 Aturan path: JANGAN hardcode `D:\ai_organizer`. Pakai walk-up ke `organizer.py`
 (`engine._app_base`, `explorer._app_root/_exe_root`). Frozen EXE: output default
-di sebelah EXE (root aplikasi, BUKAN dist/ — tidak ada lagi folder dist/).
+di sebelah EXE (root aplikasi, BUKAN dist/ â€” tidak ada lagi folder dist/).
 
 ## 3. Kontrak perilaku (dilarang melanggar)
 
 1. **Tidak ada hapus/pindah tanpa verifikasi**: setiap move wajib cek source hilang
-   + ukuran dest sama (`_move_with_permission_retry` + assert). Gagal → catat, lanjut.
+   + ukuran dest sama (`_move_with_permission_retry` + assert). Gagal â†’ catat, lanjut.
 2. **Broken default = copy** (`--broken-mode copy`). Move hanya bila user eksplisit.
 3. **`--dry-run` selalu tersedia** dan tidak menulis hasil (laporan boleh).
 4. **Satu proses per out_root** (`DirLock` + `.ai_organizer.lock`). Jangan bypass.
@@ -56,7 +56,7 @@ di sebelah EXE (root aplikasi, BUKAN dist/ — tidak ada lagi folder dist/).
 6. **Izin belajar**: hormati `settings.learn_allowed()` untuk LLM/feedback/daemon.
    Folder sistem (Windows, Program Files, $Recycle) TIDAK PERNAH dipelajari.
 7. **Jujur soal AI**: ini ML klasik + Qwen kecil. DILARANG mengklaim deep learning /
-   akurasi yang tidak diukur. Confidence < 0.3 → jangan sarankan rename.
+   akurasi yang tidak diukur. Confidence < 0.3 â†’ jangan sarankan rename.
 8. **Backward compat CLI**: `cli scan|karantina|video-broken|image-broken|size|analyze`
    + flag lama tetap jalan. Launcher hanya `install|hapus|cli|gui`.
 9. **Stdlib-first**: dependensi pip baru HARUS didaftarkan di `bootstrap.REQUIRED`
@@ -73,15 +73,15 @@ python organizer.py gui                                  # buka aplikasi Qt
 python organizer.py hapus; python organizer.py install   # uji siklus penuh
 ```
 
-Catatan build: JANGAN pakai pipe Unix (`tail`, `&&`, `grep`) — shell-nya
+Catatan build: JANGAN pakai pipe Unix (`tail`, `&&`, `grep`) â€” shell-nya
 PowerShell 5.1. Gunakan `Select-Object -First N`. Jangan `Select-Object -First`
-di tengah run panjang (pipe tertutup → crash menulis).
+di tengah run panjang (pipe tertutup â†’ crash menulis).
 
-## 5. Peta fitur → file (biar tidak salah tempat)
+## 5. Peta fitur â†’ file (biar tidak salah tempat)
 
 | Fitur | File : fungsi |
 |---|---|
-| Duplikat exact (size→1MB→SHA256) | core/engine.py : scan, report, karantina |
+| Duplikat exact (sizeâ†’1MBâ†’SHA256) | core/engine.py : scan, report, karantina |
 | Visual dHash (PIL murni) | core/engine.py : scan_visual, group_visual |
 | Size-sama | core/engine.py : size_groups |
 | Video rusak | core/engine.py : video_broken, _video_status, _find_ffprobe |
@@ -97,11 +97,11 @@ di tengah run panjang (pipe tertutup → crash menulis).
 
 ## 6. Batasan yang diketahui (jangan diulang kesalahannya)
 
-- EXE frozen: `__file__` → temp `_MEI`; pip tidak bisa; `sys.path` manipulasi diabaikan
-  → pakai package absolut `app.*` + `__init__.py` di tiap folder.
+- EXE frozen: `__file__` â†’ temp `_MEI`; pip tidak bisa; `sys.path` manipulasi diabaikan
+  â†’ pakai package absolut `app.*` + `__init__.py` di tiap folder.
 - ttk style: `H.TLabel` VALID, `TLabel.H` CRASH. Cek tiap tambah style.
 - GUI jalan in-process + redirect stdout; JANGAN subprocess ke engine.
-- `Select-Object -First N` memutus pipe → hanya untuk output pendek.
+- `Select-Object -First N` memutus pipe â†’ hanya untuk output pendek.
 - PowerShell 5.1: tidak ada `&&`, `tail`, `grep`, `head`. Ada `Select-String`.
-- Model LLM di `%OLLAMA_MODELS%` atau `llm/models`; C: sempit (2.8GB) → simpan di D:.
+- Model LLM di `%OLLAMA_MODELS%` atau `llm/models`; C: sempit (2.8GB) â†’ simpan di D:.
 - Overlay icon Explorer JANGAN dipakai (slot sistem 15, habis oleh OneDrive).

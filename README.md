@@ -2,7 +2,7 @@
 
 ```
 ai-organizer-pro\
-  qt\build\AIOrganizerPro.exe  APLIKASI desktop Qt6 — klik 2x langsung jalan
+  AIOrganizerPro.exe    APLIKASI desktop Qt6 — klik 2x langsung jalan
   qt/                 sumber GUI Qt (MainWindow, tab, player, viewer, gallery)
   src/                core C++ (scanner, hashing, database v4, duplicate, jobs)
   aiorganizer.exe     core C++ jadi (dipakai Qt via QProcess --json)
@@ -10,7 +10,7 @@ ai-organizer-pro\
                       broken, jobs, behavior) + core/ (engine) — dipanggil Qt
   organizer.py + sidecar.py  launcher & jembatan JSON di root
   app/ai/yolo/        skrip + bobot YOLO (best.pt) + dataset_raw (isi sendiri)
-  third_party/ffmpeg/bin/  ffprobe+ffmpeg (taruh manual, 211 MB/file)
+  bin/ffmpeg/           ffprobe+ffmpeg (taruh manual, 211 MB/file)
   PRO.cmd             dispatcher: gui|stats|scan|dup|doctor|migrate|db|build|build-qt
   scripts/            db-stats/query/shell, scan, duplicates, build-core,
                       build-qt, migrate, install-startup, doctor (.ps1)
@@ -22,7 +22,7 @@ ai-organizer-pro\
 ```
 
 Butuh Qt 6.8.x MSVC2022 di `D:\Qt\6.8.3\msvc2022_64` (atau set `QT_PREFIX`).
-ffmpeg/ffprobe taruh manual di `third_party/ffmpeg/bin/`.
+ffmpeg/ffprobe taruh manual di `bin/ffmpeg/`.
 
 Pemula mulai dari `docs/PANDUAN_PEMULA.md` (5 menit).
 

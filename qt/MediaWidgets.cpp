@@ -8,10 +8,93 @@
 #include <QLabel>
 #include <QListWidgetItem>
 #include <QMessageBox>
+#include <QPainter>
+#include <QPainterPath>
 #include <QPixmap>
 #include <QTimer>
 #include <QUrl>
 #include <QVBoxLayout>
+
+// ---------------- EmptyVideoPlaceholder ----------------
+EmptyVideoPlaceholder::EmptyVideoPlaceholder(QWidget* parent) : QLabel(parent) {
+  setMinimumHeight(270);
+  setAlignment(Qt::AlignHCenter | Qt::AlignBottom);
+  setWordWrap(true);
+  setContentsMargins(24, 20, 24, 30);
+}
+
+void EmptyVideoPlaceholder::paintEvent(QPaintEvent* event) {
+  Q_UNUSED(event);
+  QPainter p(this);
+  p.setRenderHint(QPainter::Antialiasing);
+  const QRectF r = rect().adjusted(1, 1, -1, -1);
+
+  // Palet placeholder: midnight-indigo → biru danau, selaras dengan border.
+  QLinearGradient sky(r.topLeft(), r.bottomLeft());
+  sky.setColorAt(0.0, QColor("#273760"));
+  sky.setColorAt(0.52, QColor("#415a8d"));
+  sky.setColorAt(0.53, QColor("#27436d"));
+  sky.setColorAt(1.0, QColor("#152544"));
+  p.setPen(QPen(QColor("#2c3a5d"), 1));
+  p.setBrush(sky);
+  p.drawRoundedRect(r, 8, 8);
+
+  // Awan lembut dan refleksi air.
+  p.setPen(Qt::NoPen);
+  p.setBrush(QColor(218, 230, 255, 34));
+  p.drawEllipse(QRectF(r.left() + r.width() * .58, r.top() + r.height() * .16,
+                       r.width() * .22, r.height() * .07));
+  p.drawEllipse(QRectF(r.left() + r.width() * .64, r.top() + r.height() * .13,
+                       r.width() * .13, r.height() * .09));
+  p.setPen(QPen(QColor(182, 204, 239, 40), 1));
+  for (int y = int(r.top() + r.height() * .63); y < r.bottom() - 20; y += 13)
+    p.drawLine(QPointF(r.left() + 18, y), QPointF(r.right() - 18, y));
+
+  // Dua siluet bukit supaya area kosong tetap terasa sebagai video preview.
+  QPainterPath distant;
+  distant.moveTo(r.left(), r.top() + r.height() * .67);
+  distant.lineTo(r.left() + r.width() * .30, r.top() + r.height() * .42);
+  distant.lineTo(r.left() + r.width() * .50, r.top() + r.height() * .62);
+  distant.lineTo(r.left() + r.width() * .68, r.top() + r.height() * .35);
+  distant.lineTo(r.right(), r.top() + r.height() * .64);
+  distant.lineTo(r.right(), r.bottom());
+  distant.lineTo(r.left(), r.bottom());
+  distant.closeSubpath();
+  p.setPen(Qt::NoPen);
+  p.setBrush(QColor("#1d3550"));
+  p.drawPath(distant);
+  QPainterPath front;
+  front.moveTo(r.left(), r.top() + r.height() * .76);
+  front.lineTo(r.left() + r.width() * .22, r.top() + r.height() * .58);
+  front.lineTo(r.left() + r.width() * .42, r.top() + r.height() * .75);
+  front.lineTo(r.left() + r.width() * .62, r.top() + r.height() * .52);
+  front.lineTo(r.right(), r.top() + r.height() * .73);
+  front.lineTo(r.right(), r.bottom());
+  front.lineTo(r.left(), r.bottom());
+  front.closeSubpath();
+  p.setBrush(QColor("#142743"));
+  p.drawPath(front);
+
+  // Tombol play beraksen lavender.
+  const QPointF c(r.center().x(), r.top() + r.height() * .48);
+  p.setBrush(QColor(138, 120, 245, 225));
+  p.drawEllipse(c, 29, 29);
+  QPainterPath triangle;
+  triangle.moveTo(c.x() - 7, c.y() - 11);
+  triangle.lineTo(c.x() - 7, c.y() + 11);
+  triangle.lineTo(c.x() + 12, c.y());
+  triangle.closeSubpath();
+  p.setBrush(QColor("#f4f2ff"));
+  p.drawPath(triangle);
+
+  p.setPen(QColor("#eaf0ff"));
+  QFont f = font();
+  f.setWeight(QFont::DemiBold);
+  f.setPointSize(12);
+  p.setFont(f);
+  p.drawText(r.adjusted(16, r.height() * .66, -16, -16),
+             Qt::AlignHCenter | Qt::AlignBottom | Qt::TextWordWrap, text());
+}
 
 // ---------------- VideoPlayer ----------------
 VideoPlayer::VideoPlayer(Backend* backend, QWidget* parent)
@@ -19,10 +102,10 @@ VideoPlayer::VideoPlayer(Backend* backend, QWidget* parent)
   auto* lay = new QVBoxLayout(this);
   lay->setContentsMargins(0, 0, 0, 0);
   m_video = new QVideoWidget(this);
-  m_fallback = new QLabel(this);
-  m_fallback->setAlignment(Qt::AlignCenter);
-  m_fallback->setWordWrap(true);
-  m_fallback->hide();
+  m_video->setStyleSheet("background:#0d1529; border:1px solid #2c3a5d; border-radius:8px;");
+  m_fallback = new EmptyVideoPlaceholder(this);
+  m_fallback->setText("Pilih video dari galeri untuk melihat preview dan detailnya.");
+  m_video->hide();
   m_info = new QLabel(this);
   m_info->setWordWrap(true);
   m_player = new QMediaPlayer(this);

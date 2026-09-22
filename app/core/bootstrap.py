@@ -15,7 +15,7 @@ REQUIRED = {
 
 OPTIONAL_INFO = [
     ("Ollama + qwen2.5:0.5b", "LLM lokal (ringkasan/second-opinion). Install: winget install Ollama.Ollama lalu: ollama pull qwen2.5:0.5b"),
-    ("FFmpeg", "Deteksi video rusak. Sudah ada di app/ffmpeg/bin sebelah aplikasi."),
+    ("FFmpeg", "Deteksi video rusak. Sudah ada di bin/ffmpeg sebelah aplikasi."),
 ]
 
 

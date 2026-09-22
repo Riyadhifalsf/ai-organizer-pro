@@ -60,7 +60,7 @@ QString Backend::engineDir() const { return proRoot(); }
 QString Backend::ffprobeBin() const {
   const QString env = envOr("AIORG_FFPROBE", {});
   if (!env.isEmpty()) return env;
-  const QStringList c{proRoot() + "/third_party/ffmpeg/bin/ffprobe.exe",
+  const QStringList c{proRoot() + "/bin/ffmpeg/ffprobe.exe",
                       engineDir() + "/app/ffmpeg/bin/ffprobe.exe",
                       engineDir() + "/ffmpeg/bin/ffprobe.exe",
                       proRoot() + "/ffmpeg/bin/ffprobe.exe"};

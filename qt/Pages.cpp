@@ -106,7 +106,7 @@ LibraryPage::LibraryPage(Backend* backend, QWidget* parent)
   m_meta = new QLabel(this);
   m_meta->setWordWrap(true);
   m_status = new QLabel(this);
-  m_meta->setStyleSheet("padding:9px; background:#121a2e; border:1px solid #303b58; border-radius:6px; color:#bdc8df;");
+  m_meta->setStyleSheet("padding:9px; background:#121a2e; border:1px solid #2c3a5d; border-radius:6px; color:#bdc8df;");
   m_status->setStyleSheet("padding:6px; color:#6fdaa0;");
   auto* detailBox = new QGroupBox("▣  Detail Video", center);
   auto* detailLay = new QVBoxLayout(detailBox);
@@ -129,7 +129,7 @@ LibraryPage::LibraryPage(Backend* backend, QWidget* parent)
   auto* acts = new QVBoxLayout(actions);
   acts->setContentsMargins(0, 0, 0, 0);
   auto* actionTitle = new QLabel("◇  Tools & Aksi", actions);
-  actionTitle->setStyleSheet("font-weight:600; color:#edf0fb; padding:9px; background:#161f37; border:1px solid #303b58; border-radius:6px;");
+  actionTitle->setStyleSheet("font-weight:600; color:#edf0fb; padding:9px; background:#161f37; border:1px solid #2c3a5d; border-radius:6px;");
   acts->addWidget(actionTitle);
   const QStringList names{"Buka",  "Lokasi",  "Rename", "Pindah",
                           "Karantina", "Tag", "Catatan", "CekDuplikat"};

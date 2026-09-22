@@ -5,7 +5,7 @@ yang terhapus permanen.
 
 ## 1. Buka aplikasi
 
-`PRO.cmd gui` — atau klik `qt\build\AIOrganizerPro.exe`.
+`PRO.cmd gui` — atau klik `AIOrganizerPro.exe` di folder utama.
 
 Sapaan pertama menjelaskan 3 langkah. Folder library-mu tersimpan otomatis
 di `data/settings.json` (boleh dibuka & diubah manual):
