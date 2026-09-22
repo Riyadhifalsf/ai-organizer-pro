@@ -13,18 +13,22 @@ di `data/settings.json` (boleh dibuka & diubah manual):
 ```json
 {
   "library_root": "D:\\Foto",
+  "autoplay_preview": true,
+  "confirm_file_actions": true,
   "dry_run_default": true,
   "llm_enabled": false,
+  "thumbnail_batch": 24,
   "first_run": false
 }
 ```
 
 ## 2. Scan pertama (baca saja, aman)
 
-1. Isi folder library di kiri atas.
-2. Tab **Semua Video/Foto** → **Scan & Index**.
-3. Klik file untuk preview + metadata. Semua tombol aksi pindah selalu
-   pratinjau dulu (dry-run).
+1. Pilih Library Root di sidebar.
+2. Buka **Video** atau **Foto** lalu muat/scan library.
+3. Klik file untuk preview + metadata. Preview video punya timeline,
+   mundur 10 detik, maju 10 detik, volume, dan autoplay yang bisa diatur.
+4. Gunakan Organizer dalam mode dry-run sebelum menerapkan perpindahan.
 
 ## 3. Memahami file JSON milikmu
 
@@ -36,7 +40,7 @@ di `data/settings.json` (boleh dibuka & diubah manual):
 | `data/jobs.json` | Antrean kerja (pending/running/done). |
 | `data/activity.log` | Jejak semua aksi (kapan, apa, ke mana). |
 | `data/video-annotations.json` | Tag + catatan per file. |
-| `data/aiorganizer.db` | Cache mesin (kecepatan index). Tidak perlu dibuka. |
+| `data/` | State aplikasi berbentuk JSON/log; tidak ada `aiorganizer.db` persistent. |
 
 ## 4. Klasifikasi + training YOLO
 

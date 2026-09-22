@@ -11,6 +11,7 @@
 #include "Backend.h"
 #include "MediaWidgets.h"
 
+class QCheckBox;
 class QComboBox;
 class QLabel;
 class QLineEdit;
@@ -21,6 +22,29 @@ class QSpinBox;
 class QTableWidget;
 class QTextEdit;
 class QTreeWidget;
+
+class SettingsPage : public QWidget {
+  Q_OBJECT
+ public:
+  explicit SettingsPage(Backend* backend, QWidget* parent = nullptr);
+ private slots:
+  void save();
+  void reset();
+ private:
+  Backend* m_backend;
+  QCheckBox* m_autoplay = nullptr;
+  QCheckBox* m_confirm = nullptr;
+  QCheckBox* m_dryRun = nullptr;
+  QCheckBox* m_llm = nullptr;
+  QSpinBox* m_thumbBatch = nullptr;
+  QLabel* m_status = nullptr;
+};
+
+class AboutPage : public QWidget {
+  Q_OBJECT
+ public:
+  explicit AboutPage(Backend* backend, QWidget* parent = nullptr);
+};
 
 // Helper: jalankan fungsi berat di thread, teruskan hasilnya ke UI thread.
 template <typename Fn, typename Done>
@@ -55,6 +79,9 @@ class LibraryPage : public QWidget {
   VideoPlayer* m_player;
   QLabel* m_meta;
   QLabel* m_status;
+  QLabel* m_analysis;
+  QLabel* m_quick;
+  QLabel* m_summary;
   QString m_current;
 };
 

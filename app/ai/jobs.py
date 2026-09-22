@@ -131,7 +131,7 @@ def _db(app_base):
     env = os.environ.get("AIORG_DB", "").strip()
     if env:
         return env
-    return os.path.join(_root(app_base), "data", "aiorganizer.db")
+    return ":memory:"
 
 
 def _run_core(app_base, args, timeout=1800):
@@ -170,7 +170,7 @@ def run_once(app_base, engine_fn):
                     "--actor", "gui"]
             if kind == "duplicates":
                 args += ["--min-size", str(payload.get("min_size", 1)),
-                         "--workers", "4"]
+                         "--workers", str(max(1, os.cpu_count() or 1))]
             res = _run_core(app_base, args)
         elif kind in ("ai", "organize"):
             argv = payload.get("argv")

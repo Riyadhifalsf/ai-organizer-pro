@@ -6,10 +6,12 @@
 #include <QListWidget>
 #include <QMediaPlayer>
 #include <QScrollArea>
+#include <QSlider>
 #include <QToolBar>
 #include <QVideoWidget>
 #include <QWidget>
 
+class QAction;
 class Backend;
 
 // Prototype empty state untuk area video: dilukis langsung dengan QPainter
@@ -36,6 +38,10 @@ class VideoPlayer : public QWidget {
   void onPlayPause();
   void onMediaStatus(QMediaPlayer::MediaStatus status);
   void onPlayerError();
+  void onPositionChanged(qint64 position);
+  void onDurationChanged(qint64 duration);
+  void onSeekSlider(qint64 position);
+  void seekBy(qint64 deltaMs);
 
  private:
   // WebView/QtMultimedia Windows andal utk MP4/H.264 & WebM; kontainer lain
@@ -48,6 +54,11 @@ class VideoPlayer : public QWidget {
   EmptyVideoPlaceholder* m_fallback;
   QLabel* m_info;
   QToolBar* m_bar;
+  QSlider* m_seek;
+  QSlider* m_volume;
+  QLabel* m_time;
+  QAction* m_playAction;
+  bool m_userSeeking = false;
   QString m_path;
 };
 
@@ -86,6 +97,7 @@ class Gallery : public QWidget {
  public:
   explicit Gallery(QWidget* parent = nullptr);
   void setItems(const QList<GalleryItem>& items, bool isVideo);
+  void setThumbnailBatch(int batch);
   void setFilter(const QString& text);
 
  signals:
@@ -98,4 +110,5 @@ class Gallery : public QWidget {
   QListWidget* m_list;
   QList<GalleryItem> m_items;
   bool m_isVideo = true;
+  int m_thumbnailBatch = 24;
 };

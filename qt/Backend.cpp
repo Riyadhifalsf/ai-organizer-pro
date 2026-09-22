@@ -94,23 +94,12 @@ QString Backend::pythonProg() const {
 QString Backend::defaultDb() const { return proRoot() + "/data/aiorganizer.db"; }
 
 bool Backend::dbEnabled() const {
-  QFile f(proRoot() + "/data/db.json");
-  if (!f.open(QIODevice::ReadOnly)) return true;
-  const QJsonObject o =
-      QJsonDocument::fromJson(f.readAll()).object();
-  return o.value("enabled").toBool(true);
+  // AIOrganizerPro memakai state JSON + mode SQLite :memory: untuk core.
+  // Tidak ada database persisten yang dibuat oleh GUI.
+  return false;
 }
 
-QString Backend::activeDb() const {
-  if (!dbEnabled()) return ":memory:";
-  QFile f(proRoot() + "/data/db.json");
-  if (f.open(QIODevice::ReadOnly)) {
-    const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
-    const QString p = o.value("path").toString().trimmed();
-    if (!p.isEmpty()) return p;
-  }
-  return defaultDb();
-}
+QString Backend::activeDb() const { return ":memory:"; }
 
 namespace {
 QString findCoreBin() {

@@ -14,7 +14,7 @@ if(MSVC)
   add_compile_definitions(_CRT_SECURE_NO_WARNINGS NOMINMAX WIN32_LEAN_AND_MEAN)
 endif()
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia MultimediaWidgets Concurrent)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia MultimediaWidgets Concurrent Svg)
 
 add_executable(AIOrganizerPro
   main.cpp
@@ -24,7 +24,7 @@ add_executable(AIOrganizerPro
   MainWindow.h MainWindow.cpp
 )
 target_link_libraries(AIOrganizerPro PRIVATE
-  Qt6::Widgets Qt6::Multimedia Qt6::MultimediaWidgets Qt6::Concurrent)
+  Qt6::Widgets Qt6::Multimedia Qt6::MultimediaWidgets Qt6::Concurrent Qt6::Svg)
 
 # EXE + DLL deploy di ROOT proyek (paling depan, gampang dicari).
 set_target_properties(AIOrganizerPro PROPERTIES

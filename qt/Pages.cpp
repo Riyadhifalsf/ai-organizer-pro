@@ -1,10 +1,12 @@
 // Pages.cpp — implementasi tab fitur (Qt Widgets, operasi berat di worker).
 #include "Pages.h"
 
+#include <QApplication>
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDesktopServices>
 #include <QDir>
+#include <QDirIterator>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
@@ -21,32 +23,39 @@
 #include <QPushButton>
 #include <QSpinBox>
 #include <QSplitter>
+#include <QSet>
 #include <QTableWidget>
 #include <QTextEdit>
 #include <QTimer>
 #include <QTreeWidget>
 #include <QUrl>
 #include <QVBoxLayout>
+#include <QThread>
+#include <algorithm>
 
 namespace {
-const QStringList kVideoExts{"mp4", "mov", "mts", "m2ts", "mkv", "avi",
-                             "wmv", "webm", "m4v", "ogv"};
-const QStringList kPhotoExts{"jpg", "jpeg", "png",  "webp", "bmp", "gif",
-                             "tif", "tiff", "heic", "heif"};
-
-QList<GalleryItem> listMedia(Backend* b, const QString& root, bool video) {
+QList<GalleryItem> listMedia(Backend*, const QString& root, bool video) {
   QList<GalleryItem> out;
-  const QJsonObject r = b->sidecar(
-      "list-videos",
-      {{"root", root},
-       {"limit", 5000},
-       {"kind", video ? "videos" : "images"}},
-      120000);
-  for (const QJsonValue& v : r.value("videos").toArray()) {
-    const QJsonObject o = v.toObject();
-    out.append({o.value("path").toString(), o.value("rel").toString(),
-                qint64(o.value("size").toDouble())});
+  static const QSet<QString> videoExts = {"mp4", "mov", "mkv", "avi", "mts",
+                                          "m2ts", "webm", "wmv", "m4v", "ogv",
+                                          "3gp", "ts", "flv"};
+  static const QSet<QString> photoExts = {"jpg", "jpeg", "png", "webp", "bmp",
+                                          "gif", "tif", "tiff", "heic", "heif"};
+  const QSet<QString>& wanted = video ? videoExts : photoExts;
+
+  QDirIterator it(root, QDir::Files | QDir::Readable | QDir::NoDotAndDotDot,
+                  QDirIterator::Subdirectories);
+  constexpr int kLimit = 5000;
+  while (it.hasNext() && out.size() < kLimit) {
+    const QString path = it.next();
+    const QFileInfo fi(path);
+    if (wanted.contains(fi.suffix().toLower()))
+      out.append({fi.absoluteFilePath(), QDir(root).relativeFilePath(path),
+                  fi.size()});
   }
+  std::sort(out.begin(), out.end(), [](const GalleryItem& a, const GalleryItem& b) {
+    return a.path.toLower() < b.path.toLower();
+  });
   return out;
 }
 
@@ -59,6 +68,8 @@ QString askText(QWidget* ctx, const QString& title, const QString& label,
 }
 
 bool askConfirm(QWidget* ctx, const QString& title, const QString& text) {
+  const QVariant setting = qApp->property("aiorg_confirm_actions");
+  if (setting.isValid() && !setting.toBool()) return true;
   return QMessageBox::question(ctx, title, text,
                                QMessageBox::Ok | QMessageBox::Cancel) ==
          QMessageBox::Ok;
@@ -68,6 +79,158 @@ void toast(QWidget* ctx, const QString& text) {
   QMessageBox::information(ctx, "AIOrganizerPro", text);
 }
 }  // namespace
+
+// ---------------- SettingsPage / AboutPage ----------------
+SettingsPage::SettingsPage(Backend* backend, QWidget* parent)
+    : QWidget(parent), m_backend(backend) {
+  auto* lay = new QVBoxLayout(this);
+  lay->setContentsMargins(28, 24, 28, 28);
+  lay->setSpacing(16);
+
+  auto* title = new QLabel("Pengaturan", this);
+  title->setObjectName("pageTitle");
+  auto* subtitle = new QLabel(
+      "Atur perilaku preview, keamanan aksi file, AI, dan beban thumbnail.",
+      this);
+  subtitle->setObjectName("pageSubtitle");
+  lay->addWidget(title);
+  lay->addWidget(subtitle);
+
+  auto* playback = new QGroupBox("Pemutaran", this);
+  auto* playbackLay = new QVBoxLayout(playback);
+  m_autoplay = new QCheckBox("Putar video otomatis saat dipilih", playback);
+  playbackLay->addWidget(m_autoplay);
+  playbackLay->addWidget(new QLabel(
+      "Matikan untuk library besar supaya pemilihan file hanya memuat preview.",
+      playback));
+
+  auto* safety = new QGroupBox("Keamanan & workflow", this);
+  auto* safetyLay = new QVBoxLayout(safety);
+  m_confirm = new QCheckBox("Konfirmasi sebelum aksi file", safety);
+  m_dryRun = new QCheckBox("Default Organizer selalu dry-run", safety);
+  safetyLay->addWidget(m_confirm);
+  safetyLay->addWidget(m_dryRun);
+  safetyLay->addWidget(new QLabel(
+      "Dry-run membuat rencana tanpa memindahkan file sampai kamu menerapkannya.",
+      safety));
+
+  auto* ai = new QGroupBox("AI", this);
+  auto* aiLay = new QVBoxLayout(ai);
+  m_llm = new QCheckBox("Izinkan fitur LLM lokal bila tersedia", ai);
+  aiLay->addWidget(m_llm);
+  aiLay->addWidget(new QLabel(
+      "Tidak mengirim file ke layanan online; fitur hanya aktif bila engine lokal tersedia.",
+      ai));
+
+  auto* perf = new QGroupBox("Performa", this);
+  auto* perfLay = new QHBoxLayout(perf);
+  perfLay->addWidget(new QLabel("Thumbnail per batch:", perf));
+  m_thumbBatch = new QSpinBox(perf);
+  m_thumbBatch->setRange(6, 64);
+  m_thumbBatch->setSingleStep(6);
+  perfLay->addWidget(m_thumbBatch);
+  perfLay->addStretch(1);
+  perfLay->addWidget(new QLabel("Lebih tinggi = lebih banyak CPU saat gallery dimuat.", perf));
+
+  lay->addWidget(playback);
+  lay->addWidget(safety);
+  lay->addWidget(ai);
+  lay->addWidget(perf);
+
+  auto* actions = new QHBoxLayout();
+  auto* bReset = new QPushButton("Pulihkan default", this);
+  auto* bSave = new QPushButton("Simpan pengaturan", this);
+  bSave->setObjectName("primaryAction");
+  m_status = new QLabel(this);
+  actions->addWidget(bReset);
+  actions->addWidget(bSave);
+  actions->addStretch(1);
+  actions->addWidget(m_status);
+  lay->addLayout(actions);
+  lay->addStretch(1);
+
+  const QJsonObject cfg = m_backend->appSettings();
+  m_autoplay->setChecked(cfg.value("autoplay_preview").toBool(true));
+  m_confirm->setChecked(cfg.value("confirm_file_actions").toBool(true));
+  m_dryRun->setChecked(cfg.value("dry_run_default").toBool(true));
+  m_llm->setChecked(cfg.value("llm_enabled").toBool(false));
+  m_thumbBatch->setValue(cfg.value("thumbnail_batch").toInt(24));
+  qApp->setProperty("aiorg_confirm_actions", m_confirm->isChecked());
+
+  connect(bSave, &QPushButton::clicked, this, &SettingsPage::save);
+  connect(bReset, &QPushButton::clicked, this, &SettingsPage::reset);
+}
+
+void SettingsPage::save() {
+  QJsonObject cfg = m_backend->appSettings();
+  cfg["autoplay_preview"] = m_autoplay->isChecked();
+  cfg["confirm_file_actions"] = m_confirm->isChecked();
+  cfg["dry_run_default"] = m_dryRun->isChecked();
+  cfg["llm_enabled"] = m_llm->isChecked();
+  cfg["thumbnail_batch"] = m_thumbBatch->value();
+  qApp->setProperty("aiorg_confirm_actions", m_confirm->isChecked());
+  const bool ok = m_backend->saveAppSettings(cfg);
+  m_status->setText(ok ? "Tersimpan" : "Gagal menyimpan");
+}
+
+void SettingsPage::reset() {
+  m_autoplay->setChecked(true);
+  m_confirm->setChecked(true);
+  m_dryRun->setChecked(true);
+  m_llm->setChecked(false);
+  m_thumbBatch->setValue(24);
+  save();
+}
+
+AboutPage::AboutPage(Backend* backend, QWidget* parent) : QWidget(parent) {
+  Q_UNUSED(backend);
+  auto* lay = new QVBoxLayout(this);
+  lay->setContentsMargins(28, 24, 28, 28);
+  lay->setSpacing(16);
+
+  auto* title = new QLabel("Tentang AIOrganizerPro", this);
+  title->setObjectName("pageTitle");
+  auto* subtitle = new QLabel(
+      "Local-first media organizer untuk library video, foto, dokumen, dan workflow AI.",
+      this);
+  subtitle->setObjectName("pageSubtitle");
+  lay->addWidget(title);
+  lay->addWidget(subtitle);
+
+  auto* overview = new QGroupBox("AIOrganizerPro 0.4", this);
+  auto* ol = new QVBoxLayout(overview);
+  ol->addWidget(new QLabel(
+      "Desktop native berbasis Qt 6 + C++20 dengan FFmpeg/Qt Multimedia untuk preview.",
+      overview));
+  ol->addWidget(new QLabel(
+      "Core C++ menangani scan, hashing, duplicate detection, dan operasi file terverifikasi.",
+      overview));
+  ol->addWidget(new QLabel(
+      "Python sidecar dipakai untuk integrasi AI/YOLO dan workflow yang memang membutuhkan Python.",
+      overview));
+
+  auto* principles = new QGroupBox("Prinsip desain", this);
+  auto* pl = new QVBoxLayout(principles);
+  for (const QString& s : {
+           "Local-first: file tetap di komputer kamu.",
+           "Preview-first: aksi organisasi dapat direncanakan sebelum diterapkan.",
+           "Responsive UI: pekerjaan berat dijalankan di worker, bukan UI thread.",
+           "Tidak ada persistent database bawaan aplikasi."
+       })
+    pl->addWidget(new QLabel("•  " + s, principles));
+
+  auto* build = new QGroupBox("Runtime", this);
+  auto* bl = new QVBoxLayout(build);
+  bl->addWidget(new QLabel("Qt 6 · C++20 · Qt Multimedia · FFmpeg · Python/YOLO", build));
+  bl->addWidget(new QLabel(
+      "Database persistent dinonaktifkan; SQLite tetap tersedia untuk mode :memory: bila core membutuhkannya.",
+      build));
+
+  lay->addWidget(overview);
+  lay->addWidget(principles);
+  lay->addWidget(build);
+  lay->addStretch(1);
+}
 
 // ---------------- LibraryPage ----------------
 LibraryPage::LibraryPage(Backend* backend, QWidget* parent)
@@ -81,28 +244,38 @@ LibraryPage::LibraryPage(Backend* backend, QWidget* parent)
   m_folder = new QLineEdit(this);
   m_folder->setPlaceholderText("D:\\Data");
   auto* bBrowse = new QPushButton("Pilih…", this);
+  auto* bPickVideo = new QPushButton("Buka Video…", this);
   auto* bScan = new QPushButton("Scan & Index", this);
   bScan->setObjectName("primaryAction");
   top->addWidget(m_folder, 1);
   top->addWidget(bBrowse);
+  top->addWidget(bPickVideo);
   top->addWidget(bScan);
   lay->addLayout(top);
   auto* split = new QSplitter(Qt::Horizontal, this);
-  auto* left = new QWidget(this);
-  auto* ll = new QVBoxLayout(left);
-  ll->setContentsMargins(0, 0, 0, 0);
-  auto* galleryTitle = new QLabel("▣  Video di folder ini", left);
-  galleryTitle->setStyleSheet("font-weight:600; color:#dce4f7; padding:4px;");
-  ll->addWidget(galleryTitle);
-  m_gallery = new Gallery(this);
-  ll->addWidget(m_gallery, 1);
-  auto* filter = new QLineEdit(this);
-  filter->setPlaceholderText("Cari nama/path…");
-  ll->addWidget(filter);
+  split->setHandleWidth(10);
+  split->setChildrenCollapsible(false);
+
+  auto* library = new QWidget(this);
+  auto* libraryLay = new QVBoxLayout(library);
+  libraryLay->setContentsMargins(0, 0, 0, 0);
+  libraryLay->setSpacing(8);
+  auto* libraryHead = new QLabel("RAK VIDEO", library);
+  libraryHead->setObjectName("sectionLabel");
+  auto* filter = new QLineEdit(library);
+  filter->setPlaceholderText("Cari nama atau folder…");
+  m_gallery = new Gallery(library);
+  m_gallery->setThumbnailBatch(
+      m_backend->appSettings().value("thumbnail_batch").toInt(24));
+  libraryLay->addWidget(libraryHead);
+  libraryLay->addWidget(filter);
+  libraryLay->addWidget(m_gallery, 1);
+
   auto* center = new QWidget(this);
   auto* rl = new QVBoxLayout(center);
   rl->setContentsMargins(0, 0, 0, 0);
-  m_player = new VideoPlayer(backend, this);
+  rl->setSpacing(10);
+  m_player = new VideoPlayer(backend, center);
   m_meta = new QLabel(this);
   m_meta->setWordWrap(true);
   m_status = new QLabel(this);
@@ -114,20 +287,21 @@ LibraryPage::LibraryPage(Backend* backend, QWidget* parent)
   detailLay->addWidget(m_status);
   auto* analysisBox = new QGroupBox("◎  Analisis File", center);
   auto* analysisLay = new QVBoxLayout(analysisBox);
-  auto* analysis = new QLabel("Pilih video untuk membaca durasi, resolusi, codec, audio, serta status metadata dengan FFprobe.", analysisBox);
-  analysis->setWordWrap(true);
-  analysis->setStyleSheet("color:#aeb9d2; padding:4px;");
-  analysisLay->addWidget(analysis);
+  m_analysis = new QLabel("Pilih video untuk membaca durasi, resolusi, codec, audio, serta status metadata dengan FFprobe.", analysisBox);
+  m_analysis->setWordWrap(true);
+  m_analysis->setStyleSheet("color:#aeb9d2; padding:4px;");
+  analysisLay->addWidget(m_analysis);
   auto* tags = new QLabel("◇  Tag & Kategori dan ▤ Catatan dapat diedit lewat tombol di panel kanan.", analysisBox);
   tags->setWordWrap(true);
   tags->setStyleSheet("color:#a99cff; padding:4px;");
   analysisLay->addWidget(tags);
 
   auto* actions = new QWidget(this);
-  actions->setMinimumWidth(238);
-  actions->setMaximumWidth(285);
+  actions->setMinimumWidth(294);
+  actions->setMaximumWidth(294);
   auto* acts = new QVBoxLayout(actions);
   acts->setContentsMargins(0, 0, 0, 0);
+  acts->setSpacing(9);
   auto* actionTitle = new QLabel("◇  Tools & Aksi", actions);
   actionTitle->setStyleSheet("font-weight:600; color:#edf0fb; padding:9px; background:#161f37; border:1px solid #2c3a5d; border-radius:6px;");
   acts->addWidget(actionTitle);
@@ -142,29 +316,63 @@ LibraryPage::LibraryPage(Backend* backend, QWidget* parent)
             [this, id = ids[i]]() { fileAction(id); });
     acts->addWidget(b);
   }
+  auto* quick = new QGroupBox("☼  Quick Analysis", actions);
+  auto* ql = new QVBoxLayout(quick);
+  m_quick = new QLabel("✓  Duplikat          Perlu dicek\n"
+                       "✓  File Rusak       Belum diperiksa\n"
+                       "✓  Metadata          Muat video\n"
+                       "✓  Ukuran File       —\n"
+                       "✓  Tipe File          —", quick);
+  m_quick->setStyleSheet("color:#aeb9d2; padding:3px; line-height:1.65;");
+  ql->addWidget(m_quick);
+  acts->addWidget(quick);
+  auto* related = new QGroupBox("◉  Relasi", actions);
+  auto* relLay = new QVBoxLayout(related);
+  for (const QString& text : {"Lihat semua video di folder ini",
+                              "Lihat video dengan tag yang sama",
+                              "Lihat video dari tanggal ini"}) {
+    auto* link = new QPushButton(text, related);
+    link->setObjectName("relationLink");
+    relLay->addWidget(link);
+  }
+  acts->addWidget(related);
+  auto* summary = new QGroupBox("▧  Ringkasan", actions);
+  auto* sumLay = new QVBoxLayout(summary);
+  m_summary = new QLabel("Total di Folder Ini\n— video\n\nTotal Ukuran\n—\n\nDurasi Total\n—", summary);
+  m_summary->setStyleSheet("color:#aeb9d2; line-height:1.4;");
+  sumLay->addWidget(m_summary);
+  acts->addWidget(summary);
   acts->addStretch(1);
-  rl->addWidget(m_player, 4);
-  rl->addWidget(detailBox);
-  rl->addWidget(analysisBox);
-  split->addWidget(left);
+  rl->addWidget(m_player, 1);
+  rl->addWidget(detailBox, 0);
+  rl->addWidget(analysisBox, 0);
+
+  split->addWidget(library);
   split->addWidget(center);
   split->addWidget(actions);
-  split->setStretchFactor(0, 1);
-  split->setStretchFactor(1, 3);
+  split->setStretchFactor(0, 0);
+  split->setStretchFactor(1, 1);
   split->setStretchFactor(2, 0);
-  split->setSizes({280, 760, 250});
+  split->setSizes({310, 760, 290});
   lay->addWidget(split, 1);
+
+  connect(filter, &QLineEdit::textChanged, m_gallery, &Gallery::setFilter);
   connect(bBrowse, &QPushButton::clicked, this, &LibraryPage::browse);
+  connect(bPickVideo, &QPushButton::clicked, this, [this]() {
+    const QString path = QFileDialog::getOpenFileName(
+        this, "Pilih video", m_root,
+        "Video (*.mp4 *.mov *.mkv *.avi *.mts *.m2ts *.webm *.wmv *.m4v *.ogv)");
+    if (!path.isEmpty()) openSelected(path);
+  });
   connect(bScan, &QPushButton::clicked, this, &LibraryPage::scan);
   connect(m_gallery, &Gallery::activated, this, &LibraryPage::openSelected);
-  connect(filter, &QLineEdit::textChanged, m_gallery, &Gallery::setFilter);
   connect(m_player, &VideoPlayer::statusMessage, m_status,
           &QLabel::setText);
 }
 
 void LibraryPage::setRoot(const QString& root) {
-  m_root = root;
-  if (!m_folder->text().isEmpty()) m_folder->setText(root);
+  m_root = root.trimmed();
+  m_folder->setText(m_root);
   refreshList();
 }
 
@@ -183,8 +391,13 @@ void LibraryPage::scan() {
   if (folder.isEmpty()) return;
   m_root = folder;
   m_status->setText("Scanning…");
+  const int workers = qMax(1, QThread::idealThreadCount());
   runAsync(
-      this, [b = m_backend, folder]() { return b->runCore({"scan", folder, "--db", b->activeDb(), "--json", "--actor", "gui"}); },
+      this,
+      [b = m_backend, folder, workers]() {
+        return b->runCore({"scan", folder, "--db", b->activeDb(), "--json",
+                           "--actor", "gui", "--workers", QString::number(workers)});
+      },
       [this](CoreResult r) {
         m_status->setText(r.ok ? "Scan selesai." : ("Scan gagal: " + r.error));
         refreshList();
@@ -192,12 +405,18 @@ void LibraryPage::scan() {
 }
 
 void LibraryPage::refreshList() {
-  if (m_root.isEmpty()) return;
+  const QString root = m_root;
+  if (root.isEmpty()) return;
   runAsync(
-      this, [b = m_backend, root = m_root]() { return listMedia(b, root, true); },
-      [this](QList<GalleryItem> items) {
+      this, [b = m_backend, root]() { return listMedia(b, root, true); },
+      [this, root](QList<GalleryItem> items) {
+        if (root != m_root) return;
         m_gallery->setItems(items, true);
         m_status->setText(QString("%1 video.").arg(items.size()));
+        qint64 bytes = 0;
+        for (const auto& item : items) bytes += item.size;
+        m_summary->setText(QString("Total di Folder Ini\n%1 video\n\nTotal Ukuran\n%2 MB\n\nDurasi Total\nPilih video")
+                               .arg(items.size()).arg(bytes / 1048576.0, 0, 'f', 1));
       });
 }
 
@@ -205,22 +424,55 @@ void LibraryPage::openSelected(const QString& path) {
   if (path.isEmpty()) return;
   m_current = path;
   m_player->load(path);
-  const QJsonObject r =
-      m_backend->sidecar("video-inspect", {{"path", path}}, 120000);
-  if (r.value("ok").toBool()) {
-    const QJsonObject pr = r.value("probe").toObject();
-    const QJsonObject v = pr.value("video").toObject();
-    m_meta->setText(QString("%1  •  %2  •  %3x%4 %5")
-                        .arg(QFileInfo(path).fileName())
-                        .arg(pr.value("duration").toDouble() > 0
-                                 ? QString::number(pr.value("duration").toDouble(), 'f', 1) + " dtk"
-                                 : "-")
-                        .arg(v.value("width").toInt())
-                        .arg(v.value("height").toInt())
-                        .arg(v.value("codec").toString()));
-  } else {
-    m_meta->setText(QFileInfo(path).fileName());
-  }
+  const QFileInfo fi(path);
+  m_meta->setText(QString("%1  ·  %2 · memuat metadata…")
+                     .arg(fi.fileName())
+                     .arg(fi.suffix().toUpper()));
+  m_analysis->setText("Membaca metadata video di worker…");
+  m_status->setText("Preview dibuka · analisis berjalan di background");
+  m_quick->setText(QString("✓  Tipe File          %1\n✓  Ukuran File       %2\n…  Metadata          Memuat…\n…  Duplikat          Belum dicek\n…  File Rusak       Belum dicek")
+                       .arg(fi.suffix().toUpper())
+                       .arg(fi.size() >= 1048576
+                                ? QString::number(fi.size() / 1048576.0, 'f', 1) + " MB"
+                                : QString::number(fi.size() / 1024.0, 'f', 0) + " KB"));
+  runAsync(
+      this,
+      [b = m_backend, path]() {
+        return b->sidecar("video-inspect", {{"path", path}}, 120000);
+      },
+      [this, path](QJsonObject r) {
+        if (m_current != path) return;
+        if (!r.value("ok").toBool()) {
+          m_analysis->setText("Metadata belum dapat dibaca: " + r.value("error").toString());
+          m_status->setText("Preview siap · metadata terbatas");
+          return;
+        }
+        const QJsonObject pr = r.value("probe").toObject();
+        const QJsonObject v = pr.value("video").toObject();
+        const double seconds = pr.value("duration").toDouble();
+        const QString duration = seconds > 0 ? QString::number(seconds, 'f', 1) + " dtk" : "—";
+        const QString audio = pr.value("audio").toObject().value("codec").toString("Tidak ada");
+        m_meta->setText(QString("%1  ·  %2  ·  %3 × %4  ·  %5")
+                            .arg(QFileInfo(path).fileName())
+                            .arg(duration)
+                            .arg(v.value("width").toInt())
+                            .arg(v.value("height").toInt())
+                            .arg(v.value("codec").toString("—")));
+        m_analysis->setText(QString("✓ FFprobe berhasil\n"
+                                    "• Video: %1 (%2 × %3)\n"
+                                    "• Audio: %4\n"
+                                    "• Durasi: %5\n\n"
+                                    "Preview siap. Aksi file tetap berjalan lewat worker.")
+                                .arg(v.value("codec").toString("—"))
+                                .arg(v.value("width").toInt())
+                                .arg(v.value("height").toInt())
+                                .arg(audio)
+                                .arg(duration));
+        m_quick->setText(QString("✓  Tipe File          %1\n✓  Ukuran File       %2 MB\n✓  Metadata          Lengkap\n…  Duplikat          Klik CekDuplikat\n✓  File Rusak       Tidak terdeteksi")
+                             .arg(QFileInfo(path).suffix().toUpper())
+                             .arg(QFileInfo(path).size() / 1048576.0, 0, 'f', 1));
+        m_status->setText("Preview siap · metadata lengkap");
+      });
 }
 
 void LibraryPage::fileAction(const QString& action) {
@@ -404,8 +656,8 @@ PhotoPage::PhotoPage(Backend* backend, QWidget* parent)
 }
 
 void PhotoPage::setRoot(const QString& root) {
-  m_root = root;
-  if (!m_folder->text().isEmpty()) m_folder->setText(root);
+  m_root = root.trimmed();
+  m_folder->setText(m_root);
   load();
 }
 
@@ -427,7 +679,10 @@ void PhotoPage::load() {
   m_root = folder;
   runAsync(
       this, [b = m_backend, folder]() { return listMedia(b, folder, false); },
-      [this](QList<GalleryItem> items) { m_gallery->setItems(items, false); });
+      [this, folder](QList<GalleryItem> items) {
+        if (folder != m_root) return;
+        m_gallery->setItems(items, false);
+      });
 }
 
 void PhotoPage::onPhoto(const QString& path) {
@@ -571,17 +826,14 @@ DuplicatesPage::DuplicatesPage(Backend* backend, QWidget* parent)
   lay->addWidget(m_groups, 1);
   auto* acts = new QHBoxLayout();
   auto* bMove = new QPushButton("Simpan + Karantina", this);
-  auto* bProp = new QPushButton("Buat Proposal", this);
+  bMove->setObjectName("primaryAction");
   m_status = new QLabel(this);
   acts->addWidget(bMove);
-  acts->addWidget(bProp);
   acts->addWidget(m_status, 1);
   lay->addLayout(acts);
   connect(bFind, &QPushButton::clicked, this, &DuplicatesPage::find);
   connect(bMove, &QPushButton::clicked, this,
           [this]() { act("move"); });
-  connect(bProp, &QPushButton::clicked, this,
-          [this]() { act("propose"); });
 }
 
 void DuplicatesPage::find() {
@@ -594,7 +846,8 @@ void DuplicatesPage::find() {
       [b = m_backend, folder, mn = m_minSize->value()]() {
         return b->runCore({"duplicates", folder, "--db", b->activeDb(),
                            "--json", "--actor", "gui", "--min-size",
-                           QString::number(mn), "--workers", "4"},
+                           QString::number(mn), "--workers",
+                           QString::number(qMax(1, QThread::idealThreadCount()))},
                           1800000);
       },
       [this](CoreResult r) {
@@ -638,38 +891,46 @@ void DuplicatesPage::act(const QString& action) {
                              "Folder tujuan:",
                              m_folder->text().trimmed() + "/__duplikat__");
   if (to.isEmpty()) return;
-  const int gid = top->data(0, Qt::UserRole).toInt();
-  if (action == "move") {
-    if (!askConfirm(this, "Pindah",
-                    QString("Pertahankan %1, pindahkan sisanya ke %2?")
-                        .arg(keep, to)))
-      return;
-    runAsync(
-        this,
-        [b = m_backend, gid, keep, to]() {
-          return b->runCore(
-              {"move-approved", "--db", b->activeDb(), "--group",
-               QString::number(gid), "--keep", keep, "--to", to, "--json",
-               "--actor", "gui"});
-        },
-        [this](CoreResult r) {
-          toast(this, r.ok ? "Dipindah." : ("Gagal: " + r.error));
-          find();
-        });
-  } else {
-    runAsync(
-        this,
-        [b = m_backend, gid, keep, to]() {
-          return b->runCore({"proposals", "propose", "--group",
-                             QString::number(gid), "--keep", keep, "--to", to,
-                             "--db", b->activeDb(), "--json", "--actor",
-                             "gui"});
-        },
-        [this](CoreResult r) {
-          toast(this, r.ok ? "Proposal dibuat (belum pindah)."
-                           : ("Gagal: " + r.error));
-        });
-  }
+  if (action != "move") return;
+  if (!askConfirm(this, "Pindah ke karantina",
+                  QString("Pertahankan %1, pindahkan %2 file duplikat ke %3?")
+                      .arg(QFileInfo(keep).fileName())
+                      .arg(paths.size() - 1)
+                      .arg(to)))
+    return;
+
+  runAsync(
+      this,
+      [paths, keep, to]() {
+        QJsonObject result{{"ok", true}, {"moved", 0}, {"failed", 0}};
+        QJsonArray failures;
+        for (const QString& path : paths) {
+          if (QFileInfo(path).absoluteFilePath().compare(
+                  QFileInfo(keep).absoluteFilePath(), Qt::CaseInsensitive) == 0)
+            continue;
+          const QString dst = QDir(to).filePath(QFileInfo(path).fileName());
+          const QJsonObject r = Backend::moveVerified(path, dst);
+          if (r.value("ok").toBool()) {
+            result["moved"] = result.value("moved").toInt() + 1;
+          } else {
+            result["failed"] = result.value("failed").toInt() + 1;
+            failures.append(path + " → " + r.value("error").toString());
+          }
+        }
+        result["failures"] = failures;
+        result["ok"] = result.value("failed").toInt() == 0;
+        return result;
+      },
+      [this](QJsonObject r) {
+        const int moved = r.value("moved").toInt();
+        const int failed = r.value("failed").toInt();
+        if (failed == 0)
+          m_status->setText(QString("%1 file dipindah · database tidak diperlukan.")
+                                .arg(moved));
+        else
+          m_status->setText(QString("%1 dipindah · %2 gagal.").arg(moved).arg(failed));
+        find();
+      });
 }
 
 // ---------------- OrganizePage ----------------
@@ -691,6 +952,8 @@ OrganizePage::OrganizePage(Backend* backend, QWidget* parent)
   lay->addLayout(form);
   auto* opts = new QHBoxLayout();
   auto* cApply = new QCheckBox("Terapkan", this);
+  cApply->setChecked(
+      !m_backend->appSettings().value("dry_run_default").toBool(true));
   auto* cCopy = new QCheckBox("Copy saja", this);
   auto* cDated = new QCheckBox("Nama tanggal", this);
   auto* cJunk = new QCheckBox("Junk→99_To-Delete", this);
