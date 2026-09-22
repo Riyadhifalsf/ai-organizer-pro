@@ -128,6 +128,7 @@ class AiPage : public QWidget {
   void refreshYolo();
   void startTrain();
   void stopTrain();
+  void loadDocs();
 
  private:
   Backend* m_backend;
@@ -144,6 +145,7 @@ class AiPage : public QWidget {
   QSpinBox* m_patience;
   QPlainTextEdit* m_yoloLog;
   QTimer* m_poll = nullptr;
+  QTableWidget* m_docs;
 };
 
 class JobsPage : public QWidget {

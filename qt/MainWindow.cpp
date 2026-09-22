@@ -114,6 +114,28 @@ MainWindow::MainWindow(QWidget* parent)
         m_health->setText(r.value("ok").toBool() ? "● online"
                                                  : "● bermasalah");
       });
+  // Pengaturan + sapaan pemula.
+  QJsonObject cfg = m_backend->appSettings();
+  const QString savedRoot = cfg.value("library_root").toString();
+  if (!savedRoot.isEmpty()) {
+    m_rootEdit->setText(savedRoot);
+    m_library->setRoot(savedRoot);
+    m_photos->setRoot(savedRoot);
+    refreshFolderTree();
+  }
+  if (cfg.value("first_run").toBool(true) &&
+      !QFileInfo::exists(m_backend->appSettingsPath())) {
+    QMessageBox::information(
+        this, "Selamat datang",
+        "AIOrganizerPro 100% offline.\n\n3 langkah pemula:\n"
+        "1. Pilih folder library (kiri atas).\n"
+        "2. Tab Video/Foto → Scan & Index (baca saja, aman).\n"
+        "3. Semua aksi pindah default pratinjau dulu (dry-run).\n\n"
+        "Perilakumu tercatat di data/behavior.jsonl agar AI memberi saran.");
+    cfg["first_run"] = false;
+    if (!savedRoot.isEmpty()) cfg["library_root"] = savedRoot;
+    m_backend->saveAppSettings(cfg);
+  }
 }
 
 void MainWindow::buildMenus() {
@@ -135,6 +157,9 @@ void MainWindow::pickRoot() {
   m_library->setRoot(d);
   m_photos->setRoot(d);
   refreshFolderTree();
+  QJsonObject cfg = m_backend->appSettings();
+  cfg["library_root"] = d;
+  m_backend->saveAppSettings(cfg);
 }
 
 void MainWindow::gotoTab(int index) { m_tabs->setCurrentIndex(index); }

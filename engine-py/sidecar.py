@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""sidecar.py — jembatan JSON engine-py untuk GUI non-Python / server Node.
+"""sidecar.py — jembatan JSON engine-py untuk aplikasi Qt (QProcess persisten).
 
 Protokol: JSON per baris di stdin -> JSON per baris di stdout.
   {"id":1,"cmd":"ping"}
@@ -117,21 +117,10 @@ def cmd_reason(path):
 
 
 def cmd_docs(limit=200):
-    """Baca doc_index terpadu (read-only) untuk GUI native / Node."""
-    import sqlite3
+    """Baca doc_index JSON (read-only) untuk aplikasi Qt."""
     try:
         from app.ai import unified
-        db = os.environ.get("AIORG_DB", "")
-        if not db or db == ":memory:" or not os.path.isfile(db):
-            return {"ok": False, "error": "db belum ada"}
-        n = max(1, min(int(limit or 200), 500))
-        c = sqlite3.connect("file:" + db + "?mode=ro", uri=True)
-        c.row_factory = sqlite3.Row
-        rows = c.execute(
-            "SELECT path,kategori,confidence,ringkasan,saran_nama"
-            " FROM doc_index ORDER BY updated_ms DESC LIMIT ?", (n,)).fetchall()
-        docs = [dict(r) for r in rows]
-        c.close()
+        docs = unified.read_docs(BASE, limit)
         return {"ok": True, "docs": docs}
     except Exception as e:
         return {"ok": False, "error": str(e)}
@@ -744,6 +733,32 @@ def cmd_yolo_train_stop():
         return {"ok": False, "error": str(e)}
 
 
+def cmd_job(action, job_id=0, kind="", payload="", status="", result="",
+              limit=50):
+    """Antrean JSON (app/ai/jobs.py). Bentuk mirror perintah core."""
+    try:
+        from app.ai import jobs as J
+        if action == "enqueue":
+            return J.enqueue(BASE, kind, payload)
+        if action == "claim":
+            return J.claim(BASE)
+        if action == "finish":
+            return J.finish(BASE, job_id, status, result)
+        if action == "list":
+            return J.list_jobs(BASE, status, limit)
+        if action in ("pause", "resume", "cancel"):
+            return J.set_status(BASE, job_id, action)
+        if action == "run-once":
+            def _engine(argv):
+                r = cmd_engine(argv)
+                r["ok"] = bool(r.get("ok"))
+                return r
+            return J.run_once(BASE, _engine)
+        return {"ok": False, "error": f"aksi job tak dikenal: {action}"}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
 def handle(req):
     cmd = req.get("cmd", "")
     if cmd == "ping":
@@ -793,6 +808,11 @@ def handle(req):
         return cmd_yolo_train_status()
     if cmd == "yolo-train-stop":
         return cmd_yolo_train_stop()
+    if cmd == "job":
+        return cmd_job(req.get("action", ""), req.get("id", 0),
+                       req.get("kind", ""), req.get("payload", ""),
+                       req.get("status", ""), req.get("result", ""),
+                       req.get("limit", 50))
     return {"ok": False, "error": f"cmd tidak dikenal: {cmd}"}
 
 

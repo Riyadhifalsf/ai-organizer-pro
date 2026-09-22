@@ -70,6 +70,11 @@ class Backend : public QObject {
 
   void logActivity(const QString& action, const QString& detail);
 
+  // ---- pengaturan aplikasi (data/settings.json, ramah pemula) ----
+  static QString appSettingsPath();
+  QJsonObject appSettings() const;
+  bool saveAppSettings(const QJsonObject& settings) const;
+
  signals:
   void sidecarRestarted();
 

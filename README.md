@@ -23,6 +23,8 @@ ai-organizer-pro\
 Butuh Qt 6.8.x MSVC2022 di `D:\Qt\6.8.3\msvc2022_64` (atau set `QT_PREFIX`).
 ffmpeg/ffprobe taruh manual di `engine-py/app/ffmpeg/bin/`.
 
+Pemula mulai dari `docs/PANDUAN_PEMULA.md` (5 menit).
+
 ## Pakai
 
 ```powershell

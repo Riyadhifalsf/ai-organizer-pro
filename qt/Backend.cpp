@@ -48,7 +48,6 @@ QString Backend::proRoot() {
   }
   for (const QString& c : cands) {
     if (QFileInfo(c + "/engine-py/sidecar.py").isFile() ||
-        QFileInfo(c + "/gui/index.html").isFile() ||
         QFileInfo(c + "/aiorganizer.exe").isFile())
       return QDir(c).absolutePath();
   }
@@ -336,8 +335,7 @@ QJsonObject Backend::moveVerified(const QString& src, const QString& dst) {
   return {{"ok", true}, {"path", dst}, {"mode", mode}};
 }
 
-void Backend::logActivity(const QString& action, const QString& detail) {
-  const QString p = proRoot() + "/data/activity.log";
+void Backend::logActivity(const QString& action, const QString& detail) {  const QString p = proRoot() + "/data/activity.log";
   QDir().mkpath(QFileInfo(p).absolutePath());
   QFile f(p);
   if (f.open(QIODevice::Append)) {
@@ -346,4 +344,36 @@ void Backend::logActivity(const QString& action, const QString& detail) {
                         {"detail", detail.left(500)}};
     f.write(QJsonDocument(e).toJson(QJsonDocument::Compact) + "\n");
   }
+}
+
+QString Backend::appSettingsPath() {
+  return proRoot() + "/data/settings.json";
+}
+
+QJsonObject Backend::appSettings() const {
+  QJsonObject d{{"library_root", ""},
+                {"dry_run_default", true},
+                {"llm_enabled", false},
+                {"language", "id"},
+                {"first_run", true},
+                {"yolo",
+                 QJsonObject{{"epochs", 150},
+                             {"batch", 16},
+                             {"model_size", "m"},
+                             {"imgsz", 288},
+                             {"patience", 25}}}};
+  QFile f(appSettingsPath());
+  if (f.open(QIODevice::ReadOnly)) {
+    const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
+    for (auto it = o.begin(); it != o.end(); ++it) d[it.key()] = it.value();
+  }
+  return d;
+}
+
+bool Backend::saveAppSettings(const QJsonObject& settings) const {
+  QDir().mkpath(QFileInfo(appSettingsPath()).absolutePath());
+  QFile f(appSettingsPath());
+  if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) return false;
+  f.write(QJsonDocument(settings).toJson(QJsonDocument::Indented));
+  return true;
 }

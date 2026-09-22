@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""bootstrap.py — auto-install library saat awal (user tidak install manual).
+"""bootstrap.py — cek library Python (100% offline, TANPA download otomatis).
 
-Dipanggil otomatis oleh organizer.py / GUI / daemon bila import gagal.
-Paket: pillow (gambar), watchdog (monitor folder, daemon).
+Aplikasi full offline: fungsi ini HANYA memeriksa + memberi tahu perintah
+manual. Tidak ada pip install otomatis agar perilaku bisa diprediksi dan
+aman untuk pemula. Paket: pillow (gambar), watchdog (monitor folder, daemon).
 Jalankan manual: python bootstrap.py
 """
-import subprocess
 import sys
 
 REQUIRED = {
@@ -19,7 +19,13 @@ OPTIONAL_INFO = [
 ]
 
 
-def ensure(auto=True):
+def ensure(auto=False):
+    """Cek dependensi. TIDAK PERNAH download (offline-first).
+
+    Argumen auto dipertahankan untuk kompatibilitas pemanggil lama, namun
+    diabaikan: install selalu manual oleh user.
+    """
+    _ = auto
     missing = []
     for mod, pip_name in REQUIRED.items():
         try:
@@ -28,26 +34,9 @@ def ensure(auto=True):
             missing.append(pip_name)
     if not missing:
         return True
-    frozen = bool(getattr(sys, "frozen", False))
-    if frozen:
-        # Di dalam EXE tidak bisa pip install: library harus sudah dibundel.
-        print(f"BOOTSTRAP: kurang di dalam EXE: {', '.join(missing)} "
-              f"(pakai versi source .py bila perlu).", flush=True)
-        return False
-    if missing and auto:
-        print(f"BOOTSTRAP: menginstall {', '.join(missing)} ...", flush=True)
-        try:
-            subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", *missing],
-                           check=True, timeout=600)
-            print("BOOTSTRAP: selesai.", flush=True)
-        except Exception as e:
-            print(f"BOOTSTRAP GAGAL: {e}", flush=True)
-            print("Install manual: pip install " + " ".join(missing), flush=True)
-            return False
-    else:
-        print("Kurang: pip install " + " ".join(missing), flush=True)
-        return False
-    return True
+    print("Kurang (offline, install manual bila butuh): pip install " +
+          " ".join(missing), flush=True)
+    return False
 
 
 def show_optional():

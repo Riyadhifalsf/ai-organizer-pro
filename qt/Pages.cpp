@@ -779,6 +779,11 @@ AiPage::AiPage(Backend* backend, QWidget* parent)
   m_yoloLog->setReadOnly(true);
   m_yoloLog->setMaximumBlockCount(200);
   lay->addWidget(m_yoloLog, 1);
+  m_docs = new QTableWidget(0, 4, this);
+  m_docs->setHorizontalHeaderLabels({"Kategori", "Conf", "Saran nama", "Path"});
+  m_docs->horizontalHeader()->setStretchLastSection(true);
+  m_docs->setMaximumHeight(180);
+  lay->addWidget(m_docs);
   m_poll = new QTimer(this);
   m_poll->setInterval(4000);
   connect(bRun, &QPushButton::clicked, this, &AiPage::runAi);
@@ -801,6 +806,29 @@ AiPage::AiPage(Backend* backend, QWidget* parent)
         });
   });
   refreshYolo();
+  loadDocs();
+}
+
+void AiPage::loadDocs() {
+  runAsync(
+      this, [b = m_backend]() { return b->sidecar("docs", {{"limit", 200}}); },
+      [this](QJsonObject r) {
+        m_docs->setRowCount(0);
+        if (!r.value("ok").toBool()) return;
+        for (const QJsonValue& v : r.value("docs").toArray()) {
+          const QJsonObject d = v.toObject();
+          const int row = m_docs->rowCount();
+          m_docs->insertRow(row);
+          m_docs->setItem(row, 0,
+                          new QTableWidgetItem(d.value("kategori").toString()));
+          m_docs->setItem(row, 1, new QTableWidgetItem(QString::number(
+                                           d.value("confidence").toDouble(), 'f', 2)));
+          m_docs->setItem(row, 2, new QTableWidgetItem(
+                                       d.value("saran_nama").toString()));
+          m_docs->setItem(row, 3,
+                          new QTableWidgetItem(d.value("path").toString()));
+        }
+      });
 }
 
 void AiPage::runAi() {
@@ -822,6 +850,7 @@ void AiPage::runAi() {
       },
       [this](QJsonObject r) {
         m_out->setPlainText(r.value("output").toString().right(12000));
+        loadDocs();
       });
 }
 
@@ -940,13 +969,12 @@ void JobsPage::refresh() {
   runAsync(
       this,
       [b = m_backend]() {
-        return b->runCore({"job-list", "--db", b->activeDb(), "--json",
-                           "--status", "", "--limit", "50"});
+        return b->sidecar("job", {{"action", "list"}, {"limit", 50}});
       },
-      [this](CoreResult r) {
+      [this](QJsonObject r) {
         m_table->setRowCount(0);
-        if (!r.ok) return;
-        for (const QJsonValue& v : r.json.value("jobs").toArray()) {
+        if (!r.value("ok").toBool()) return;
+        for (const QJsonValue& v : r.value("jobs").toArray()) {
           const QJsonObject j = v.toObject();
           const int row = m_table->rowCount();
           m_table->insertRow(row);
@@ -968,80 +996,31 @@ void JobsPage::enqueue() {
       this,
       [b = m_backend, k = m_kind->currentText(),
        p = m_payload->text().trimmed()]() {
-        return b->runCore({"job-enqueue", k, p, "--db", b->activeDb(),
-                           "--json", "--actor", "gui"});
+        return b->sidecar(
+            "job", {{"action", "enqueue"}, {"kind", k}, {"payload", p}});
       },
-      [this](CoreResult r) {
-        toast(this, r.ok ? "Job ditambahkan." : ("Gagal: " + r.error));
+      [this](QJsonObject r) {
+        toast(this, r.value("ok").toBool() ? "Job ditambahkan."
+                                           : ("Gagal: " + r.value("error").toString()));
         refresh();
       });
 }
 
 void JobsPage::claim() {
   runAsync(
-      this,
-      [b = m_backend]() {
-        return b->runCore({"job-claim", "--db", b->activeDb(), "--json"});
-      },
-      [this](CoreResult r) {
-        toast(this, r.ok ? "Job diambil." : "Tidak ada job pending.");
+      this, [b = m_backend]() { return b->sidecar("job", {{"action", "claim"}}); },
+      [this](QJsonObject r) {
+        toast(this, r.value("ok").toBool() ? "Job diambil."
+                                           : "Tidak ada job pending.");
         refresh();
       });
 }
 
 void JobsPage::runOnce() {
-  // Worker: claim -> eksekusi (scan/duplicates/ai/organize) -> finish.
+  // Worker jalan di sidecar Python (data/jobs.json): claim -> eksekusi -> finish.
   runAsync(
       this,
-      [b = m_backend]() -> QJsonObject {
-        const CoreResult c =
-            b->runCore({"job-claim", "--db", b->activeDb(), "--json"});
-        if (!c.ok)
-          return {{"ok", true}, {"ran", false}, {"message", "tidak ada job"}};
-        const QJsonObject j = c.json;
-        const int id = j.value("id").toInt();
-        const QString kind = j.value("kind").toString();
-        QJsonObject payload;
-        {
-          const QJsonDocument d =
-              QJsonDocument::fromJson(j.value("payload").toString().toUtf8());
-          payload = d.isObject() ? d.object() : QJsonObject();
-        }
-        auto finish = [&](const QString& st, const QJsonObject& res) {
-          b->runCore({"job-finish", QString::number(id), st,
-                      QString::fromUtf8(
-                          QJsonDocument(res).toJson(QJsonDocument::Compact)),
-                      "--db", b->activeDb(), "--json"});
-        };
-        if (kind == "scan" || kind == "duplicates") {
-          const QString folder = payload.value("folder").toString(
-              payload.value("root").toString());
-          QStringList args{kind == "scan" ? "scan" : "duplicates", folder,
-                           "--db", b->activeDb(), "--json", "--actor", "gui"};
-          if (kind == "duplicates") args << "--min-size" << "1" << "--workers" << "4";
-          const CoreResult r = b->runCore(args, 1800000);
-          finish(r.ok ? "done" : "failed", r.json);
-          return {{"ok", r.ok}, {"ran", true}, {"id", id}};
-        }
-        if (kind == "ai" || kind == "organize") {
-          QStringList argv;
-          for (const QJsonValue& v : payload.value("argv").toArray())
-            argv << v.toString();
-          if (argv.isEmpty() && kind == "organize" &&
-              !payload.value("folder").toString().isEmpty()) {
-            argv << "organize-videos" << payload.value("folder").toString()
-                 << "--dry-run";
-          }
-          if (argv.isEmpty())
-            return {{"ok", false}, {"ran", true}, {"id", id}};
-          const QJsonObject r = b->aiEngine(argv);
-          const bool ok = r.value("ok").toBool(true);
-          finish(ok ? "done" : "failed", r);
-          return {{"ok", ok}, {"ran", true}, {"id", id}};
-        }
-        finish("failed", {{"error", "jenis job tak didukung"}});
-        return {{"ok", false}, {"ran", true}, {"id", id}};
-      },
+      [b = m_backend]() { return b->sidecar("job", {{"action", "run-once"}}); },
       [this](QJsonObject r) {
         toast(this, r.value("ran").toBool()
                         ? (r.value("ok").toBool() ? "Job selesai." : "Job gagal.")
@@ -1059,11 +1038,13 @@ void JobsPage::act(const QString& action) {
   runAsync(
       this,
       [b = m_backend, action, id]() {
-        return b->runCore({"job-" + action, QString::number(id), "--db",
-                           b->activeDb(), "--json", "--actor", "gui"});
+        return b->sidecar(
+            "job", {{"action", action}, {"id", id}});
       },
-      [this](CoreResult r) {
-        toast(this, r.ok ? "OK." : ("Gagal: " + r.error));
+      [this](QJsonObject r) {
+        toast(this, r.value("ok").toBool()
+                        ? "OK."
+                        : ("Gagal: " + r.value("error").toString()));
         refresh();
       });
 }

@@ -1,107 +1,91 @@
 #!/usr/bin/env python3
-"""ai/unified.py — jembatan engine-py ke database terpadu AIOrganizerPro.
+"""ai/unified.py — state user AIOrganizerPro dalam JSON (tanpa database).
 
-Skema v3 (dibuat oleh core C++, tabel CREATE IF NOT EXISTS di sini juga agar
-sidecar bisa jalan duluan). Semua fungsi aman: gagal -> diam, engine tetap jalan.
+- data/doc_index.json  : hasil analyze dokumen (bisa dibaca manusia)
+- data/doc_feedback.jsonl : koreksi user per dokumen
+- behavior user         : lihat behavior.py (data/behavior.jsonl)
+- antrean job           : lihat jobs.py (data/jobs.json)
 
-Lokasi DB terpadu:
-  env AIORG_DB, atau <pro-root>/data/aiorganizer.db (pro-root = parent engine-py),
-  dipakai HANYA bila env diset atau file-nya sudah ada (tidak pernah membuat
-  folder stray di instalasi lama D:\\ai_organizer).
+SQLite (.db) tersisa HANYA sebagai cache mesin internal core C++ yang tidak
+perlu dibaca user. Semua fungsi aman: gagal -> diam, engine tetap jalan.
 """
 import hashlib
+import json
 import os
-import sqlite3
 import time
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS behavior_events(
-  id INTEGER PRIMARY KEY, t_ms INTEGER NOT NULL, kind TEXT NOT NULL,
-  path TEXT NOT NULL DEFAULT '', detail TEXT NOT NULL DEFAULT '');
-CREATE TABLE IF NOT EXISTS behavior_prefs(
-  key TEXT PRIMARY KEY, value TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS doc_index(
-  path TEXT PRIMARY KEY, kategori TEXT NOT NULL DEFAULT '',
-  confidence REAL NOT NULL DEFAULT 0, ringkasan TEXT NOT NULL DEFAULT '',
-  saran_nama TEXT NOT NULL DEFAULT '', updated_ms INTEGER NOT NULL DEFAULT 0);
-CREATE TABLE IF NOT EXISTS doc_feedback(
-  id INTEGER PRIMARY KEY, t_ms INTEGER NOT NULL, path TEXT NOT NULL,
-  kategori TEXT NOT NULL, teks_hash TEXT NOT NULL DEFAULT '');
-CREATE TABLE IF NOT EXISTS jobs(
-  id INTEGER PRIMARY KEY, kind TEXT NOT NULL, payload TEXT NOT NULL DEFAULT '',
-  status TEXT NOT NULL DEFAULT 'pending', created_ms INTEGER NOT NULL,
-  started_ms INTEGER NOT NULL DEFAULT 0, ended_ms INTEGER NOT NULL DEFAULT 0,
-  result TEXT NOT NULL DEFAULT '');
-"""
+DOC_INDEX_NAME = os.path.join("data", "doc_index.json")
+DOC_FEEDBACK_NAME = os.path.join("data", "doc_feedback.jsonl")
+MAX_DOCS = 5000
+
+
+def _root(app_base):
+    base = os.path.abspath(app_base)
+    root = os.path.dirname(base) if os.path.basename(base) != "data" else base
+    if not os.path.isdir(os.path.join(root, "data")):
+        root = base
+    return root
+
+
+def _doc_path(app_base):
+    return os.path.join(_root(app_base), DOC_INDEX_NAME)
 
 
 def unified_db_path(app_base):
-    env = os.environ.get("AIORG_DB", "").strip()
-    if env:
-        # ":memory:" = mode efemeral (DB dimatikan): jangan tulis ke mana pun.
-        if env == ":memory:":
-            return ""
-        return os.path.abspath(env)
-    base = os.path.abspath(app_base)
-    parent = os.path.dirname(base)
-    cand = os.path.join(parent, "data", "aiorganizer.db")
-    # jangan bikin folder baru di instalasi lama: hanya bila file sudah ada
-    if os.path.isfile(cand):
-        return cand
+    """Kompat: tidak ada DB user lagi -> string kosong (cache mesin milik core)."""
     return ""
 
 
-def _con(db):
-    c = sqlite3.connect(db, timeout=30)
-    c.execute("PRAGMA journal_mode=WAL")
-    c.execute("PRAGMA synchronous=NORMAL")
-    c.executescript(SCHEMA)
-    return c
-
-
 def mirror_behavior(app_base, kind, path="", detail=""):
-    db = unified_db_path(app_base)
-    if not db:
-        return
+    """Kompat no-op: Behavior.log() adalah satu-satunya penulis behavior.jsonl."""
+    return
+
+
+def _read_docs(app_base):
     try:
-        os.makedirs(os.path.dirname(db), exist_ok=True)
-        with _con(db) as c:
-            c.execute("INSERT INTO behavior_events(t_ms,kind,path,detail)"
-                      " VALUES(?,?,?,?)",
-                      (int(time.time() * 1000), kind, path, detail))
-    except Exception:
-        pass
+        with open(_doc_path(app_base), encoding="utf-8") as f:
+            d = json.load(f)
+            docs = d.get("docs", []) if isinstance(d, dict) else []
+            return [x for x in docs if isinstance(x, dict)]
+    except (OSError, ValueError):
+        return []
+
+
+def read_docs(app_base, limit=200):
+    docs = _read_docs(app_base)
+    docs.sort(key=lambda d: d.get("updated_ms", 0), reverse=True)
+    return docs[:max(1, min(int(limit or 200), 500))]
 
 
 def upsert_doc(app_base, path, kategori, confidence, ringkasan="", saran_nama=""):
-    db = unified_db_path(app_base)
-    if not db:
-        return
     try:
-        os.makedirs(os.path.dirname(db), exist_ok=True)
-        with _con(db) as c:
-            c.execute(
-                "INSERT INTO doc_index(path,kategori,confidence,ringkasan,"
-                "saran_nama,updated_ms) VALUES(?,?,?,?,?,?)"
-                " ON CONFLICT(path) DO UPDATE SET kategori=excluded.kategori,"
-                "confidence=excluded.confidence,ringkasan=excluded.ringkasan,"
-                "saran_nama=excluded.saran_nama,updated_ms=excluded.updated_ms",
-                (path, kategori, float(confidence or 0), ringkasan,
-                 saran_nama, int(time.time() * 1000)))
-    except Exception:
+        docs = _read_docs(app_base)
+        now = int(time.time() * 1000)
+        row = {"path": path, "kategori": kategori or "",
+               "confidence": float(confidence or 0),
+               "ringkasan": ringkasan or "", "saran_nama": saran_nama or "",
+               "updated_ms": now}
+        docs = [d for d in docs if d.get("path") != path]
+        docs.insert(0, row)
+        docs = docs[:MAX_DOCS]
+        p = _doc_path(app_base)
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        tmp = p + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump({"updated_ms": now, "docs": docs}, f, ensure_ascii=False)
+        os.replace(tmp, p)
+    except (OSError, ValueError):
         pass
 
 
 def save_doc_feedback(app_base, path, kategori, teks=""):
-    db = unified_db_path(app_base)
-    if not db:
-        return
     try:
         h = hashlib.sha256((teks or path).encode("utf-8", "replace")).hexdigest()[:16]
-        os.makedirs(os.path.dirname(db), exist_ok=True)
-        with _con(db) as c:
-            c.execute("INSERT INTO doc_feedback(t_ms,path,kategori,teks_hash)"
-                      " VALUES(?,?,?,?)",
-                      (int(time.time() * 1000), path, kategori, h))
-    except Exception:
+        p = os.path.join(_root(app_base), DOC_FEEDBACK_NAME)
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        with open(p, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"t_ms": int(time.time() * 1000), "path": path,
+                                "kategori": kategori, "teks_hash": h},
+                               ensure_ascii=False) + "\n")
+    except OSError:
         pass
