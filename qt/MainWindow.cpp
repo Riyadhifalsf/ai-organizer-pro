@@ -8,6 +8,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHBoxLayout>
+#include <QIcon>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMenuBar>
@@ -23,6 +24,10 @@ MainWindow::MainWindow(QWidget* parent)
     : QMainWindow(parent), m_backend(new Backend(this)) {
   setWindowTitle("AIOrganizerPro — Local File Intelligence (Qt)");
   resize(1520, 900);
+  {
+    const QString icon = Backend::proRoot() + "/assets/icon.ico";
+    if (QFileInfo::exists(icon)) setWindowIcon(QIcon(icon));
+  }
   buildMenus();
 
   // Sidebar kiri: root + navigasi + folder tree.

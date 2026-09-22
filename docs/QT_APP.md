@@ -1,7 +1,7 @@
 # Aplikasi Qt AIOrganizerPro (0.4.0)
 
-Pengganti web stack (HTML/Tauri/Node) yang diarsipkan ke
-`_archive/web-legacy-20260922/`. Python tersisa HANYA untuk AI.
+Pengganti web stack (HTML/Tauri/Node) yang dihapus permanen 2026-09-22
+(pulih via git history bila perlu). Python tersisa HANYA untuk AI.
 
 ## Arsitektur (sesuai pohon)
 

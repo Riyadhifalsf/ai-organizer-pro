@@ -13,18 +13,22 @@ ringan, aman (tidak pernah menghapus tanpa perintah eksplisit dan verifikasi).
 ## 2. Struktur yang WAJIB dijaga
 
 ```
-D:\ai_organizer\                 <- APP ROOT (jangan pindah/rename)
-  organizer.py                   <- LAUNCHER tipis. HANYA: install|hapus|cli|gui
-  app_gui.py                     <- GUI tkinter (in-process ke core.engine)
+D:\ai-organizer-pro\            <- APP ROOT (jangan pindah/rename)
+  organizer.py (engine-py/)     <- LAUNCHER tipis. HANYA: install|hapus|cli|gui
+                                  (gui = buka qt/build/AIOrganizerPro.exe)
+  qt/                           <- GUI Qt6 (pengganti app_gui.py tkinter,
+                                  dihapus 2026-09-22)
   icon.png / icon.ico / CARA_PAKAI.txt / AGENTS.md (file ini)
   app\
     core\engine.py               <- SELURUH engine (jangan taruh logika di launcher!)
-    core\bootstrap.py            <- auto-install pip (pillow, watchdog)
+    core\bootstrap.py            <- cek pip (pillow, watchdog); TANPA auto-install (offline)
     core\settings.py             <- settings JSON + learn_allowed()
     ai\docai.py                  <- TF-IDF + centroid + SimHash (stdlib saja!)
     ai\llm.py                    <- klien Ollama (stdlib urllib), MODELS terdaftar
     ai\reason.py                 <- reasoning L1/L2/L3 + cache
-    ai\behavior.py               <- SQLite perilaku + recommend()
+    ai\behavior.py               <- JSON perilaku (behavior.jsonl) + recommend()
+    ai\jobs.py                   <- antrean JSON (jobs.json)
+    ai\unified.py                <- doc_index JSON (tanpa SQLite)
     integrations\explorer.py     <- COM shellex, helper, startup, shortcut, toast
     scripts\daemon.py            <- background (watchdog + poll Explorer)
     scripts\uninstall.py         <- uninstall.exe
@@ -65,10 +69,7 @@ di sebelah EXE (root aplikasi, BUKAN dist/ — tidak ada lagi folder dist/).
 python -m py_compile <file diubah>                       # cepat
 python organizer.py cli scan D:\results\Screenshots      # uji engine
 python organizer.py cli analyze D:\results\Documents --limit 5
-python -c "import sys; sys.path.insert(0,'D:/ai_organizer'); import app_gui; a=app_gui.App(); a.update(); a.destroy(); print('GUI OK')"
-# build (dari D:\ai_organizer):
-python -m PyInstaller --onefile --noconfirm --icon icon.ico --name organizer-cli --hidden-import watchdog --distpath . --workpath $env:TEMP\b1 --specpath $env:TEMP\b1 organizer.py
-# (gui: +--windowed app_gui.py ; uninstall: scripts/uninstall.py + --paths .)
+python organizer.py gui                                  # buka aplikasi Qt
 python organizer.py hapus; python organizer.py install   # uji siklus penuh
 ```
 
@@ -91,7 +92,7 @@ di tengah run panjang (pipe tertutup → crash menulis).
 | Perilaku/rekomendasi | ai/behavior.py : Behavior |
 | Explorer/COM/toast/startup | integrations/explorer.py |
 | Daemon | app/scripts/daemon.py |
-| GUI | app_gui.py (tab...) + core/settings.py |
+| GUI | qt/ (Qt6, lihat docs/QT_APP.md) + core/settings.py |
 | Uninstall | app/scripts/uninstall.py + core/engine.py do_uninstall |
 
 ## 6. Batasan yang diketahui (jangan diulang kesalahannya)

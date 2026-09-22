@@ -6,7 +6,6 @@ ok "cmake" ((cmake --version) -match 'cmake version')
 ok "VS BuildTools" (Test-Path $VCVARS)
 ok "core exe" (Test-Path $CORE_EXE)
 ok "aplikasi Qt" (Test-Path (Join-Path $PRO "qt\build\AIOrganizerPro.exe"))
-ok "organizer-cli exe" (Test-Path (Join-Path $PRO "organizer-cli.exe"))
 ok "ffmpeg" (Test-Path (Join-Path $PRO "engine-py\app\ffmpeg\bin\ffprobe.exe"))
 ok "icon" (Test-Path (Join-Path $PRO "assets\icon.ico"))
 if (Test-Path $env:AIORG_DB) {

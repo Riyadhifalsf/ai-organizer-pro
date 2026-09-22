@@ -17,7 +17,8 @@ ai-organizer-pro\
   docs/               dokumentasi (MASTER, ARCHITECTURE, BUILD, YOLO, QT)
   tools/              migrate_unified.py
   tests/              GoogleTest
-  _archive/           web stack lama (gui/server/src-tauri) + cadangan lain
+  _archive/           cadangan pre-merge (web stack terhapus permanen 2026-09-22,
+                      pulih via git history bila perlu)
 ```
 
 Butuh Qt 6.8.x MSVC2022 di `D:\Qt\6.8.3\msvc2022_64` (atau set `QT_PREFIX`).
@@ -30,7 +31,7 @@ Pemula mulai dari `docs/PANDUAN_PEMULA.md` (5 menit).
 ```powershell
 PRO.cmd gui                 # buka aplikasi desktop Qt
 PRO.cmd build-qt            # rebuild aplikasi Qt
-PRO.cmd doctor              # cek kesehatan (node/python/db/exe/ffmpeg/icon)
+PRO.cmd doctor              # cek kesehatan (python/db/exe/ffmpeg/icon/Qt)
 PRO.cmd scan D:\Data        # scan cepat (baca saja)
 PRO.cmd dup D:\Data         # cari duplikat exact
 PRO.cmd db "SELECT ..."     # query baca ke DB terpadu

@@ -4,7 +4,7 @@
     organizer install          pasang (bila belum): lib + menu Explorer + startup
     organizer hapus            lepas (bila sudah): menu + startup + paket pip
     organizer cli <args...>    jalankan engine mode teks (scan/karantina/analyze/...)
-    organizer gui              buka GUI modern
+    organizer gui              buka aplikasi desktop Qt
 
 Contoh:
     organizer install
@@ -52,24 +52,18 @@ def main(argv=None):
 
 
 def run_gui():
-    if getattr(sys, "frozen", False):
-        import glob
-        cands = glob.glob(os.path.join(BASE, "*gui*.exe"))
-        cands = [c for c in cands if os.path.abspath(c) != os.path.abspath(sys.executable)]
-        if cands:
-            os.startfile(cands[0])
-            return
-        # fallback: GUI ikut dibundel sebagai modul
-        try:
-            from app_gui import App
-            App().mainloop()
-            return
-        except Exception as e:
-            print(f"GUI tidak ditemukan di sebelah EXE: {e}", flush=True)
-            return
-    import subprocess
-    gui = os.path.join(BASE, "app_gui.py")
-    subprocess.run([sys.executable, gui])
+    """Buka aplikasi desktop Qt (qt/build/AIOrganizerPro.exe)."""
+    pro = os.path.dirname(BASE)  # BASE = engine-py -> pro root
+    exe = os.path.join(pro, "qt", "build", "AIOrganizerPro.exe")
+    if os.path.isfile(exe):
+        if os.name == "nt":
+            os.startfile(exe)
+        else:
+            import subprocess
+            subprocess.Popen([exe])
+        return
+    print(f"Aplikasi Qt belum dibuild: {exe}\nJalankan: PRO.cmd build-qt",
+          flush=True)
 
 
 if __name__ == "__main__":
