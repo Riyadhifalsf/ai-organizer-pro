@@ -32,10 +32,11 @@ def project_root():
     env = os.environ.get("AIORG_YOLO_PROJECT", "").strip()
     if env and os.path.isdir(env):
         return os.path.abspath(env)
-    here = os.path.dirname(os.path.abspath(__file__))  # .../engine-py/app/ai
-    app_dir = os.path.dirname(here)                     # .../engine-py/app
-    engine_py = os.path.dirname(app_dir)                # .../engine-py
-    pro_root = os.path.dirname(engine_py)               # .../ai-organizer-pro
+    here = os.path.dirname(os.path.abspath(__file__))  # .../python/ai_worker/app/ai
+    app_dir = os.path.dirname(here)                     # .../python/ai_worker/app
+    worker = os.path.dirname(app_dir)                   # .../python/ai_worker
+    py_dir = os.path.dirname(worker)                    # .../python
+    pro_root = os.path.dirname(py_dir)                  # .../ai-organizer-pro
     cand = os.path.join(pro_root, "ai-yolo-project")
     if os.path.isdir(cand):
         return os.path.abspath(cand)

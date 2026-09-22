@@ -47,19 +47,20 @@ QString Backend::proRoot() {
     if (!dir.cdUp()) break;
   }
   for (const QString& c : cands) {
-    if (QFileInfo(c + "/engine-py/sidecar.py").isFile() ||
+    if (QFileInfo(c + "/python/ai_worker/sidecar.py").isFile() ||
         QFileInfo(c + "/aiorganizer.exe").isFile())
       return QDir(c).absolutePath();
   }
   return QDir::currentPath();
 }
 
-QString Backend::engineDir() const { return proRoot() + "/engine-py"; }
+QString Backend::engineDir() const { return proRoot() + "/python/ai_worker"; }
 
 QString Backend::ffprobeBin() const {
   const QString env = envOr("AIORG_FFPROBE", {});
   if (!env.isEmpty()) return env;
-  const QStringList c{engineDir() + "/app/ffmpeg/bin/ffprobe.exe",
+  const QStringList c{proRoot() + "/third_party/ffmpeg/bin/ffprobe.exe",
+                      engineDir() + "/app/ffmpeg/bin/ffprobe.exe",
                       engineDir() + "/ffmpeg/bin/ffprobe.exe",
                       proRoot() + "/ffmpeg/bin/ffprobe.exe"};
   for (const QString& p : c)
@@ -220,9 +221,13 @@ QJsonObject Backend::sidecar(const QString& cmd, const QJsonObject& extra,
 }
 
 QJsonObject Backend::aiEngine(const QStringList& argv, int timeoutMs) {
-  QJsonArray a;
-  for (const QString& s : argv) a.append(s);
-  return sidecar("engine", {{"argv", a}}, timeoutMs);
+  // Selaraskan output ke results/ root proyek bila pemanggil tak menentukan
+  // --out sendiri (blend: tak ada lagi results/ di dalam folder worker).
+  QStringList a = argv;
+  if (!a.contains("--out")) a << "--out" << proRoot();
+  QJsonArray arr;
+  for (const QString& s : a) arr.append(s);
+  return sidecar("engine", {{"argv", arr}}, timeoutMs);
 }
 
 QJsonObject Backend::yoloStatus() { return sidecar("yolo-status", {}, 60000); }

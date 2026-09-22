@@ -568,7 +568,7 @@ VIDEO_WORKERS = _env_workers("AIORG_VIDEO_WORKERS", 6)
 def _find_ffprobe():
     """Return ffprobe executable path if available.
 
-    Urutan: sebelah EXE -> app/ffmpeg/bin bawaan -> PATH.
+    Urutan: sebelah EXE -> third_party/ffmpeg/bin -> app/ffmpeg/bin bawaan -> PATH.
     """
     import shutil
     ff = "ffprobe.exe" if os.name == "nt" else "ffprobe"
@@ -580,6 +580,9 @@ def _find_ffprobe():
             cands.append(os.path.join(base, "ffmpeg", "bin", ff))
     except Exception:
         pass
+    # pro root = 3 tingkat di atas app/core (python/ai_worker/app/core).
+    pro_root = os.path.dirname(os.path.dirname(os.path.dirname(APP_FILES)))
+    cands.append(os.path.join(pro_root, "third_party", "ffmpeg", "bin", ff))
     cands.append(os.path.join(APP_FILES, "ffmpeg", "bin", ff))
     cands.append(os.path.join(BASE, "ffmpeg-9.0.1", "bin", ff))  # legacy
     for c in cands:
@@ -711,7 +714,7 @@ def video_broken(target, out=None, broken_mode="copy", dry_run=False, limit=0):
     ffprobe = _find_ffprobe()
     if not ffprobe:
         print("ERROR: ffprobe tidak ditemukan.")
-        print("Letakkan folder app/ffmpeg/bin di sebelah aplikasi, atau install FFmpeg ke PATH.")
+        print("Letakkan ffprobe di third_party/ffmpeg/bin, atau install FFmpeg ke PATH.")
         return
 
     out = out or resolve_out(None)
@@ -1494,7 +1497,7 @@ def do_install(args):
     mark_installed(BASE, True)
     print("4. Opsional (tidak otomatis):", flush=True)
     print("   - LLM Qwen: winget install Ollama.Ollama && ollama pull qwen2.5:0.5b", flush=True)
-    print("   - FFmpeg: sudah ada di app/ffmpeg/bin sebelah aplikasi.", flush=True)
+    print("   - FFmpeg: third_party/ffmpeg/bin sebelah aplikasi.", flush=True)
     print("SELESAI. Daemon aktif setelah restart / login berikutnya.", flush=True)
 
 

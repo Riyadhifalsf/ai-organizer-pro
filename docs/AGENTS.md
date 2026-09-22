@@ -14,7 +14,7 @@ ringan, aman (tidak pernah menghapus tanpa perintah eksplisit dan verifikasi).
 
 ```
 D:\ai-organizer-pro\            <- APP ROOT (jangan pindah/rename)
-  organizer.py (engine-py/)     <- LAUNCHER tipis. HANYA: install|hapus|cli|gui
+  python/ai_worker/organizer.py <- LAUNCHER tipis. HANYA: install|hapus|cli|gui
                                   (gui = buka qt/build/AIOrganizerPro.exe)
   qt/                           <- GUI Qt6 (pengganti app_gui.py tkinter,
                                   dihapus 2026-09-22)

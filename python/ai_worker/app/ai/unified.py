@@ -20,11 +20,16 @@ MAX_DOCS = 5000
 
 
 def _root(app_base):
-    base = os.path.abspath(app_base)
-    root = os.path.dirname(base) if os.path.basename(base) != "data" else base
-    if not os.path.isdir(os.path.join(root, "data")):
-        root = base
-    return root
+    """Pro root: naik dari app_base sampai ketemu penanda PRO.cmd."""
+    cur = os.path.abspath(app_base)
+    for _ in range(7):
+        if os.path.isfile(os.path.join(cur, "PRO.cmd")):
+            return cur
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            break
+        cur = parent
+    return os.path.abspath(app_base)
 
 
 def _doc_path(app_base):

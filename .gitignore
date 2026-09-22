@@ -16,8 +16,8 @@ CTestTestfile.cmake
 *.exp
 
 # ===== binary raksasa (di luar limit GitHub / install manual) =====
-# ffmpeg+ffprobe 211MB per file -> taruh manual di engine-py/app/ffmpeg/bin/
-engine-py/app/ffmpeg/bin/
+# ffmpeg+ffprobe 211MB per file -> taruh manual di third_party/ffmpeg/bin/
+third_party/ffmpeg/bin/
 *.exe
 
 # ===== database & log lokal (data user) =====
@@ -32,7 +32,6 @@ desktop.ini
 
 # ===== output user (jangan commit; path di-anchor agar laporan YOLO tetap ikut) =====
 /results/
-/engine-py/results/
 ai-yolo-project/results/sorted/
 ai-yolo-project/results/predictions/
 ai-yolo-project/results/scan/

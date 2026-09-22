@@ -53,7 +53,16 @@ def main(argv=None):
 
 def run_gui():
     """Buka aplikasi desktop Qt (qt/build/AIOrganizerPro.exe)."""
-    pro = os.path.dirname(BASE)  # BASE = engine-py -> pro root
+    cur = BASE  # BASE = python/ai_worker -> naik sampai PRO.cmd ketemu
+    pro = BASE
+    for _ in range(6):
+        if os.path.isfile(os.path.join(cur, "PRO.cmd")):
+            pro = cur
+            break
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            break
+        cur = parent
     exe = os.path.join(pro, "qt", "build", "AIOrganizerPro.exe")
     if os.path.isfile(exe):
         if os.name == "nt":

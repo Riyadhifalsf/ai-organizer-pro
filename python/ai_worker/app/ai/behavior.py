@@ -22,11 +22,18 @@ KEEP_DAYS = 120
 
 class Behavior:
     def __init__(self, app_base):
-        # app_base = folder engine-py; state user tinggal di PRO ROOT/data.
+        # app_base = folder ai_worker; state user tinggal di PRO ROOT/data.
         base = os.path.abspath(app_base)
-        self.root = os.path.dirname(base) if os.path.basename(base) != "data" else base
-        if not os.path.isdir(os.path.join(self.root, "data")):
-            self.root = base  # fallback: dev lama
+        self.root = base
+        cur = base
+        for _ in range(7):
+            if os.path.isfile(os.path.join(cur, "PRO.cmd")):
+                self.root = cur
+                break
+            parent = os.path.dirname(cur)
+            if parent == cur:
+                break
+            cur = parent
         self.events_path = os.path.join(self.root, EVENTS_NAME)
         self.prefs_path = os.path.join(self.root, PREFS_NAME)
         try:
@@ -42,7 +49,7 @@ class Behavior:
                 return
         except OSError:
             pass
-        legacy = os.path.join(self.root, "engine-py", "results", "reports", "behavior.db")
+        legacy = os.path.join(self.root, "results", "reports", "behavior.db")
         if not os.path.isfile(legacy):
             return
         try:

@@ -16,11 +16,15 @@ VALID = ("pending", "running", "paused", "done", "failed", "cancelled")
 
 
 def _root(app_base):
-    base = os.path.abspath(app_base)
-    root = os.path.dirname(base) if os.path.basename(base) != "data" else base
-    if not os.path.isdir(os.path.join(root, "data")):
-        root = base
-    return root
+    cur = os.path.abspath(app_base)
+    for _ in range(7):
+        if os.path.isfile(os.path.join(cur, "PRO.cmd")):
+            return cur
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            break
+        cur = parent
+    return os.path.abspath(app_base)
 
 
 def _path(app_base):
@@ -174,7 +178,10 @@ def run_once(app_base, engine_fn):
                 argv = ["organize-videos", payload["folder"], "--dry-run"]
             if not argv:
                 raise RuntimeError("payload harus punya argv[]")
-            res = engine_fn(list(argv)) or {}
+            argv = list(argv)
+            if "--out" not in argv:
+                argv += ["--out", _root(app_base)]
+            res = engine_fn(argv) or {}
         else:
             raise RuntimeError(f"jenis job tak didukung: {kind}")
         ok = bool(res.get("ok", True))

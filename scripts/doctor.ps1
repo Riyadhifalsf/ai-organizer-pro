@@ -6,7 +6,7 @@ ok "cmake" ((cmake --version) -match 'cmake version')
 ok "VS BuildTools" (Test-Path $VCVARS)
 ok "core exe" (Test-Path $CORE_EXE)
 ok "aplikasi Qt" (Test-Path (Join-Path $PRO "qt\build\AIOrganizerPro.exe"))
-ok "ffmpeg" (Test-Path (Join-Path $PRO "engine-py\app\ffmpeg\bin\ffprobe.exe"))
+ok "ffmpeg" (Test-Path (Join-Path $PRO "third_party\ffmpeg\bin\ffprobe.exe"))
 ok "icon" (Test-Path (Join-Path $PRO "assets\icon.ico"))
 if (Test-Path $env:AIORG_DB) {
   $v = python -c "import sqlite3;c=sqlite3.connect(r'''$($env:AIORG_DB)''');print(c.execute('PRAGMA user_version').fetchone()[0])"
