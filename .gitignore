@@ -30,20 +30,20 @@ db.json
 activity.log
 desktop.ini
 
-# ===== output user (jangan commit; path di-anchor agar laporan YOLO tetap ikut) =====
+# ===== output user (jangan commit) =====
 /results/
-ai-yolo-project/results/sorted/
-ai-yolo-project/results/predictions/
-ai-yolo-project/results/scan/
-ai-yolo-project/results/errors/
 
-# ===== YOLO: data & artefak training (berat) =====
-ai-yolo-project/dataset/
-ai-yolo-project/dataset_raw/
-ai-yolo-project/errors/
-ai-yolo-project/runs/
-# KECUALI bobot aktif (dipakai yolo_bridge default MODEL=train15)
-!ai-yolo-project/runs/classify/train15/weights/best.pt
+# ===== YOLO: data & artefak training (berat, dibuat ulang saat latih) =====
+app/ai/yolo/runs/
+app/ai/yolo/dataset/
+app/ai/yolo/dataset_raw/
+app/ai/yolo/errors/
+app/ai/yolo/results/
+app/ai/yolo/__pycache__/
+app/ai/yolo/train_app.log
+app/ai/yolo/.train_app.json
+# Bobot + skrip + bukti evaluasi ikut commit:
+# app/ai/yolo/{best.pt,*.py}, docs/yolo-eval/
 
 # ===== python / node =====
 __pycache__/

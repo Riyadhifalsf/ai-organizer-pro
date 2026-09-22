@@ -6,20 +6,19 @@ ai-organizer-pro\
   qt/                 sumber GUI Qt (MainWindow, tab, player, viewer, gallery)
   src/                core C++ (scanner, hashing, database v4, duplicate, jobs)
   aiorganizer.exe     core C++ jadi (dipakai Qt via QProcess --json)
-  python/ai_worker/ HANYA AI: sidecar.py (YOLO classify/training, analyze,
-                      organize, broken) — dipanggil Qt
+  app/                Python AI: ai/ (YOLO classify/training, analyze, organize,
+                      broken, jobs, behavior) + core/ (engine) — dipanggil Qt
+  organizer.py + sidecar.py  launcher & jembatan JSON di root
+  app/ai/yolo/        skrip + bobot YOLO (best.pt) + dataset_raw (isi sendiri)
   third_party/ffmpeg/bin/  ffprobe+ffmpeg (taruh manual, 211 MB/file)
-  ai-yolo-project/    training + bobot YOLO (jangan diubah strukturnya)
   PRO.cmd             dispatcher: gui|stats|scan|dup|doctor|migrate|db|build|build-qt
   scripts/            db-stats/query/shell, scan, duplicates, build-core,
                       build-qt, migrate, install-startup, doctor (.ps1)
-  data/               aiorganizer.db + db.json (saklar) + activity.log
-  db/                 schema_v4.sql — SATU database terpadu
-  docs/               dokumentasi (MASTER, ARCHITECTURE, BUILD, YOLO, QT)
-  tools/              migrate_unified.py
+  data/               JSON user (behavior, doc_index, jobs, settings, activity)
+                      + aiorganizer.db (cache mesin internal)
+  results/            output engine (laporan CSV, hash cache)
+  docs/               dokumentasi (PANDUAN_PEMULA mulai di sini)
   tests/              GoogleTest
-  _archive/           cadangan pre-merge (web stack terhapus permanen 2026-09-22,
-                      pulih via git history bila perlu)
 ```
 
 Butuh Qt 6.8.x MSVC2022 di `D:\Qt\6.8.3\msvc2022_64` (atau set `QT_PREFIX`).

@@ -8,6 +8,7 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
+#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QInputDialog>
@@ -72,11 +73,16 @@ void toast(QWidget* ctx, const QString& text) {
 LibraryPage::LibraryPage(Backend* backend, QWidget* parent)
     : QWidget(parent), m_backend(backend) {
   auto* lay = new QVBoxLayout(this);
+  lay->setContentsMargins(14, 10, 14, 14);
+  auto* crumb = new QLabel("Video Organizer   ›   Library   ›   Pilih video untuk melihat detail", this);
+  crumb->setStyleSheet("color:#aeb9d2; padding:2px 0;");
+  lay->addWidget(crumb);
   auto* top = new QHBoxLayout();
   m_folder = new QLineEdit(this);
   m_folder->setPlaceholderText("D:\\Data");
   auto* bBrowse = new QPushButton("Pilih…", this);
   auto* bScan = new QPushButton("Scan & Index", this);
+  bScan->setObjectName("primaryAction");
   top->addWidget(m_folder, 1);
   top->addWidget(bBrowse);
   top->addWidget(bScan);
@@ -84,36 +90,69 @@ LibraryPage::LibraryPage(Backend* backend, QWidget* parent)
   auto* split = new QSplitter(Qt::Horizontal, this);
   auto* left = new QWidget(this);
   auto* ll = new QVBoxLayout(left);
+  ll->setContentsMargins(0, 0, 0, 0);
+  auto* galleryTitle = new QLabel("▣  Video di folder ini", left);
+  galleryTitle->setStyleSheet("font-weight:600; color:#dce4f7; padding:4px;");
+  ll->addWidget(galleryTitle);
   m_gallery = new Gallery(this);
   ll->addWidget(m_gallery, 1);
   auto* filter = new QLineEdit(this);
   filter->setPlaceholderText("Cari nama/path…");
   ll->addWidget(filter);
-  auto* right = new QWidget(this);
-  auto* rl = new QVBoxLayout(right);
+  auto* center = new QWidget(this);
+  auto* rl = new QVBoxLayout(center);
+  rl->setContentsMargins(0, 0, 0, 0);
   m_player = new VideoPlayer(backend, this);
   m_meta = new QLabel(this);
   m_meta->setWordWrap(true);
   m_status = new QLabel(this);
-  auto* acts = new QHBoxLayout();
+  m_meta->setStyleSheet("padding:9px; background:#121a2e; border:1px solid #303b58; border-radius:6px; color:#bdc8df;");
+  m_status->setStyleSheet("padding:6px; color:#6fdaa0;");
+  auto* detailBox = new QGroupBox("▣  Detail Video", center);
+  auto* detailLay = new QVBoxLayout(detailBox);
+  detailLay->addWidget(m_meta);
+  detailLay->addWidget(m_status);
+  auto* analysisBox = new QGroupBox("◎  Analisis File", center);
+  auto* analysisLay = new QVBoxLayout(analysisBox);
+  auto* analysis = new QLabel("Pilih video untuk membaca durasi, resolusi, codec, audio, serta status metadata dengan FFprobe.", analysisBox);
+  analysis->setWordWrap(true);
+  analysis->setStyleSheet("color:#aeb9d2; padding:4px;");
+  analysisLay->addWidget(analysis);
+  auto* tags = new QLabel("◇  Tag & Kategori dan ▤ Catatan dapat diedit lewat tombol di panel kanan.", analysisBox);
+  tags->setWordWrap(true);
+  tags->setStyleSheet("color:#a99cff; padding:4px;");
+  analysisLay->addWidget(tags);
+
+  auto* actions = new QWidget(this);
+  actions->setMinimumWidth(238);
+  actions->setMaximumWidth(285);
+  auto* acts = new QVBoxLayout(actions);
+  acts->setContentsMargins(0, 0, 0, 0);
+  auto* actionTitle = new QLabel("◇  Tools & Aksi", actions);
+  actionTitle->setStyleSheet("font-weight:600; color:#edf0fb; padding:9px; background:#161f37; border:1px solid #303b58; border-radius:6px;");
+  acts->addWidget(actionTitle);
   const QStringList names{"Buka",  "Lokasi",  "Rename", "Pindah",
                           "Karantina", "Tag", "Catatan", "CekDuplikat"};
   const QStringList ids{"open", "folder",  "rename", "move",
                         "delete", "tags", "note", "dupcheck"};
   for (int i = 0; i < names.size(); ++i) {
     auto* b = new QPushButton(names[i], this);
+    if (i == 0) b->setObjectName("primaryAction");
     connect(b, &QPushButton::clicked, this,
             [this, id = ids[i]]() { fileAction(id); });
     acts->addWidget(b);
   }
-  rl->addWidget(m_player, 1);
-  rl->addWidget(m_meta);
-  rl->addWidget(m_status);
-  rl->addLayout(acts);
+  acts->addStretch(1);
+  rl->addWidget(m_player, 4);
+  rl->addWidget(detailBox);
+  rl->addWidget(analysisBox);
   split->addWidget(left);
-  split->addWidget(right);
+  split->addWidget(center);
+  split->addWidget(actions);
   split->setStretchFactor(0, 1);
-  split->setStretchFactor(1, 1);
+  split->setStretchFactor(1, 3);
+  split->setStretchFactor(2, 0);
+  split->setSizes({280, 760, 250});
   lay->addWidget(split, 1);
   connect(bBrowse, &QPushButton::clicked, this, &LibraryPage::browse);
   connect(bScan, &QPushButton::clicked, this, &LibraryPage::scan);

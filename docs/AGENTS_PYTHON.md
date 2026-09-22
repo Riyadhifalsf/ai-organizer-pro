@@ -15,13 +15,12 @@ ringan, aman (tidak pernah menghapus tanpa perintah eksplisit dan verifikasi).
 ```
 D:\ai-organizer-pro\            <- APP ROOT (jangan pindah/rename)
   organizer.py              <- LAUNCHER tipis. HANYA: install|hapus|cli|gui
-                                  (gui = buka qt/build/AIOrganizerPro.exe)
-  qt/                           <- GUI Qt6 (pengganti app_gui.py tkinter,
-                                  dihapus 2026-09-22)
+                                   (gui = buka qt/build/AIOrganizerPro.exe)
+  qt/                           <- GUI Qt6 (app_gui.py tkinter dihapus 2026-09-22)
   icon.png / icon.ico / CARA_PAKAI.txt / AGENTS.md (file ini)
   app\
     core\engine.py               <- SELURUH engine (jangan taruh logika di launcher!)
-    core\bootstrap.py            <- cek pip (pillow, watchdog); TANPA auto-install (offline)
+    core\bootstrap.py            <- cek pip (pillow, watchdog); TANPA auto-install
     core\settings.py             <- settings JSON + learn_allowed()
     ai\docai.py                  <- TF-IDF + centroid + SimHash (stdlib saja!)
     ai\llm.py                    <- klien Ollama (stdlib urllib), MODELS terdaftar
@@ -70,7 +69,7 @@ python -m py_compile <file diubah>                       # cepat
 python organizer.py cli scan D:\results\Screenshots      # uji engine
 python organizer.py cli analyze D:\results\Documents --limit 5
 python organizer.py gui                                  # buka aplikasi Qt
-python organizer.py hapus; python organizer.py install   # uji siklus penuh
+# (organizer-cli.exe frozen dihapus 2026-09-22; Qt memakai source sidecar.)
 ```
 
 Catatan build: JANGAN pakai pipe Unix (`tail`, `&&`, `grep`) — shell-nya

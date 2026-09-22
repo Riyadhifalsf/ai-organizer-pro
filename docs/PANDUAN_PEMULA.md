@@ -41,7 +41,7 @@ di `data/settings.json` (boleh dibuka & diubah manual):
 ## 4. Klasifikasi + training YOLO
 
 - Tab **AI + Training** → mode `yolo-classify` untuk menebak isi foto.
-- Kartu training: isi `ai-yolo-project\dataset_raw\<kelas>\*.jpg` dulu,
+- Kartu training: isi `app\ai\yolo\dataset_raw\<kelas>\*.jpg` dulu,
   atur epoch/batch, **Latih**. Berjalan background; **Stop** kapan saja.
 
 ## 5. Kalau ada yang aneh

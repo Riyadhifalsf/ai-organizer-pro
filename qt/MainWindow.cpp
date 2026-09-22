@@ -33,28 +33,38 @@ MainWindow::MainWindow(QWidget* parent)
   // Sidebar kiri: root + navigasi + folder tree.
   auto* side = new QDockWidget("Navigasi", this);
   side->setFeatures(QDockWidget::NoDockWidgetFeatures);
+  side->setTitleBarWidget(new QWidget(side));
   auto* sw = new QWidget(side);
+  sw->setObjectName("sidePanel");
   auto* sl = new QVBoxLayout(sw);
+  sl->setContentsMargins(12, 12, 12, 12);
+  auto* brand = new QLabel("▶  Video Organizer", sw);
+  brand->setObjectName("brand");
+  sl->addWidget(brand);
   auto* rootRow = new QHBoxLayout();
   m_rootEdit = new QLineEdit(sw);
-  m_rootEdit->setPlaceholderText("Folder library…");
+  m_rootEdit->setPlaceholderText("⌕  Cari folder atau video…");
   auto* bRoot = new QPushButton("…", sw);
   bRoot->setFixedWidth(36);
   rootRow->addWidget(m_rootEdit, 1);
   rootRow->addWidget(bRoot);
   sl->addLayout(rootRow);
-  const QStringList nav{"Beranda:Video", "Semua Video", "Semua Foto",
+  auto* navTitle = new QLabel("NAVIGASI", sw);
+  navTitle->setObjectName("sectionLabel");
+  sl->addWidget(navTitle);
+  const QStringList nav{"⌂  Beranda", "▣  Semua Video", "▧  Semua Foto",
                         "Duplikat", "Organizer", "AI + Training", "Jobs",
                         "Database", "Aktivitas"};
   for (int i = 0; i < nav.size(); ++i) {
     auto* b = new QPushButton(nav[i], sw);
-    b->setFlat(true);
-    b->setStyleSheet("text-align:left; padding:6px;");
+    b->setObjectName("navButton");
     connect(b, &QPushButton::clicked, this,
             [this, i]() { gotoTab(i); });
     sl->addWidget(b);
   }
-  sl->addWidget(new QLabel("Folder aktif:", sw));
+  auto* folderTitle = new QLabel("FOLDER", sw);
+  folderTitle->setObjectName("sectionLabel");
+  sl->addWidget(folderTitle);
   m_tree = new QTreeWidget(sw);
   m_tree->setHeaderHidden(true);
   sl->addWidget(m_tree, 1);
@@ -83,6 +93,7 @@ MainWindow::MainWindow(QWidget* parent)
   m_tabs->addTab(new JobsPage(m_backend, this), "Jobs");
   m_tabs->addTab(new DbPage(m_backend, this), "Database");
   m_tabs->addTab(new ActivityPage(m_backend, this), "Aktivitas");
+  m_tabs->setCurrentIndex(1);  // mulai dari halaman video seperti workspace utama
   setCentralWidget(m_tabs);
 
   m_health = new QLabel("●", this);

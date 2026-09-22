@@ -47,14 +47,15 @@ QString Backend::proRoot() {
     if (!dir.cdUp()) break;
   }
   for (const QString& c : cands) {
-    if (QFileInfo(c + "/python/ai_worker/sidecar.py").isFile() ||
+    if (QFileInfo(c + "/sidecar.py").isFile() ||
         QFileInfo(c + "/aiorganizer.exe").isFile())
       return QDir(c).absolutePath();
   }
   return QDir::currentPath();
 }
 
-QString Backend::engineDir() const { return proRoot() + "/python/ai_worker"; }
+// Worker Python diblend ke root: sidecar.py + app/ di sebelah PRO root.
+QString Backend::engineDir() const { return proRoot(); }
 
 QString Backend::ffprobeBin() const {
   const QString env = envOr("AIORG_FFPROBE", {});
